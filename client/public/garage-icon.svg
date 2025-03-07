@@ -1,0 +1,16 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="256" fill="hsl(215, 60%, 25%)" />
+  
+  <!-- Waves representing shoreline -->
+  <path d="M96 320C160 280 224 360 288 320C352 280 416 360 480 320" 
+        stroke="white" strokeWidth="24" strokeLinecap="round" fill="none"/>
+  <path d="M32 368C96 328 160 408 224 368C288 328 352 408 416 368" 
+        stroke="white" strokeWidth="24" strokeLinecap="round" fill="none" opacity="0.7"/>
+  
+  <!-- Stylized garage door -->
+  <rect x="160" y="128" width="192" height="160" 
+        rx="8" stroke="white" strokeWidth="24" fill="none"/>
+  <line x1="160" y1="208" x2="352" y2="208" 
+        stroke="white" strokeWidth="16"/>
+</svg>

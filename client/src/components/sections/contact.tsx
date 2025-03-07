@@ -25,9 +25,8 @@ import { Button } from "@/components/ui/button";
 
 const services = [
   "New Installation",
-  "Repair",
-  "Maintenance",
-  "Emergency Service",
+  "Replacement",
+  "Maintenance / Repair",
 ];
 
 export default function Contact() {

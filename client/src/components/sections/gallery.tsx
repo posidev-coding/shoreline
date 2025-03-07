@@ -3,11 +3,11 @@ import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 const images = [
   {
-    src: "https://images.unsplash.com/photo-1739700712159-550519327ca7",
+    src: "/src/images/door2.jpg",
     alt: "Modern garage door installation",
   },
   {
-    src: "https://images.unsplash.com/photo-1531265726475-52ad60219627",
+    src: "/src/images/garage.png",
     alt: "Contemporary garage door design",
   },
   {
@@ -15,7 +15,7 @@ const images = [
     alt: "Custom garage door",
   },
   {
-    src: "https://images.unsplash.com/photo-1729606225450-998974e4d9e1",
+    src: "/src/images/door1.jpg",
     alt: "Professional installation",
   },
 ];

@@ -7,7 +7,7 @@ export default function Hero() {
       <div
         className="absolute inset-0 z-0"
         style={{
-          backgroundImage: `linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.4)), url(https://images.unsplash.com/photo-1739700712159-550519327ca7)`,
+          backgroundImage: `linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.4)), url(https://images.unsplash.com/photo-1518780664697-55e3ad937233)`,
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}

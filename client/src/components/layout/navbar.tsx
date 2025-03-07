@@ -25,7 +25,7 @@ export default function Navbar() {
           <Link href="/">
             <a className="flex items-center gap-2">
               <img src="/garage-icon.svg" alt="Logo" className="h-8 w-8" />
-              <span className="text-2xl font-bold text-primary">Shoreline Overhead Doors</span>
+              <span className="text-2xl font-bold text-primary font-serif tracking-wide">Shoreline Overhead Doors</span>
             </a>
           </Link>
 
@@ -35,7 +35,7 @@ export default function Navbar() {
               <a
                 key={item.href}
                 href={item.href}
-                className="text-foreground/60 hover:text-foreground transition-colors py-2"
+                className="text-foreground/60 hover:text-foreground transition-colors py-2 font-medium"
               >
                 {item.label}
               </a>
@@ -55,7 +55,7 @@ export default function Navbar() {
             <SheetContent>
               <div className="flex items-center gap-2 mb-8">
                 <img src="/garage-icon.svg" alt="Logo" className="h-8 w-8" />
-                <span className="text-xl font-bold">Shoreline Overhead Doors</span>
+                <span className="text-xl font-bold font-serif tracking-wide">Shoreline Overhead Doors</span>
               </div>
               <div className="flex flex-col space-y-4">
                 {navItems.map((item) => (

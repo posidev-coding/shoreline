@@ -17,7 +17,7 @@ export default function Home() {
         <Contact />
       </main>
       <footer className="bg-primary text-primary-foreground py-4 text-center">
-        <p>© {new Date().getFullYear()} Elite Garage Doors. All rights reserved.</p>
+        <p>© {new Date().getFullYear()} Shoreline Overhead Doors. All rights reserved.</p>
       </footer>
     </div>
   );

@@ -30,7 +30,7 @@ export default function Hero() {
             <Button size="lg" asChild>
               <a href="#contact">Get Free Quote</a>
             </Button>
-            <Button size="lg" variant="outline" asChild>
+            <Button size="lg" variant="secondary" asChild>
               <a href="#services">Our Services</a>
             </Button>
           </div>

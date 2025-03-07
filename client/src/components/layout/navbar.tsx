@@ -1,12 +1,9 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Menu, X } from "lucide-react";
+import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Sheet,
-  SheetContent,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { ShorelineIcon } from "@/components/icons/shoreline-icon";
 
 const navItems = [
   { label: "Services", href: "#services" },
@@ -23,7 +20,12 @@ export default function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <Link href="/">
-            <a className="text-2xl font-bold text-primary">Shoreline Overhead Doors</a>
+            <a className="flex items-center gap-2">
+              <ShorelineIcon className="h-8 w-8 text-primary" />
+              <span className="text-2xl font-bold text-primary">
+                Shoreline Overhead Doors
+              </span>
+            </a>
           </Link>
 
           {/* Desktop Navigation */}

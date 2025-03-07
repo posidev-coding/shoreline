@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "wouter";
-import { Menu } from "lucide-react";
+import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -23,10 +23,7 @@ export default function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <Link href="/">
-            <a className="flex items-center gap-2">
-              <img src="/garage-icon.svg" alt="Logo" className="h-8 w-8" />
-              <span className="text-2xl font-bold text-primary font-serif tracking-wide">Shoreline Overhead Doors</span>
-            </a>
+            <a className="text-2xl font-bold text-primary">Shoreline Overhead Doors</a>
           </Link>
 
           {/* Desktop Navigation */}
@@ -35,7 +32,7 @@ export default function Navbar() {
               <a
                 key={item.href}
                 href={item.href}
-                className="text-foreground/60 hover:text-foreground transition-colors py-2 font-medium"
+                className="text-foreground/60 hover:text-foreground transition-colors py-2"
               >
                 {item.label}
               </a>
@@ -53,11 +50,7 @@ export default function Navbar() {
               </Button>
             </SheetTrigger>
             <SheetContent>
-              <div className="flex items-center gap-2 mb-8">
-                <img src="/garage-icon.svg" alt="Logo" className="h-8 w-8" />
-                <span className="text-xl font-bold font-serif tracking-wide">Shoreline Overhead Doors</span>
-              </div>
-              <div className="flex flex-col space-y-4">
+              <div className="flex flex-col space-y-4 mt-8">
                 {navItems.map((item) => (
                   <a
                     key={item.href}

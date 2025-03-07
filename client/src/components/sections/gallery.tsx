@@ -3,20 +3,20 @@ import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 const images = [
   {
-    src: "https://images.unsplash.com/photo-1512917774080-9991f1c4c750",
-    alt: "Modern craftsman beach house with custom garage door",
+    src: "https://images.unsplash.com/photo-1739700712159-550519327ca7",
+    alt: "Modern garage door installation",
   },
   {
-    src: "https://images.unsplash.com/photo-1568605114967-8130f3a36994",
-    alt: "Contemporary beach home with designer garage door",
+    src: "https://images.unsplash.com/photo-1531265726475-52ad60219627",
+    alt: "Contemporary garage door design",
   },
   {
-    src: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6",
-    alt: "Luxury beachfront property with premium garage door",
+    src: "https://images.unsplash.com/photo-1605146768851-eda79da39897",
+    alt: "Custom garage door",
   },
   {
-    src: "https://images.unsplash.com/photo-1570129477492-45c003edd2be",
-    alt: "Coastal residence with high-end garage installation",
+    src: "https://images.unsplash.com/photo-1729606225450-998974e4d9e1",
+    alt: "Professional installation",
   },
 ];
 

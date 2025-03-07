@@ -27,12 +27,12 @@ export default function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex gap-6">
+          <div className="hidden md:flex items-center space-x-6">
             {navItems.map((item) => (
               <a
                 key={item.href}
                 href={item.href}
-                className="text-foreground/60 hover:text-foreground transition-colors"
+                className="text-foreground/60 hover:text-foreground transition-colors py-2"
               >
                 {item.label}
               </a>
@@ -50,12 +50,12 @@ export default function Navbar() {
               </Button>
             </SheetTrigger>
             <SheetContent>
-              <div className="flex flex-col gap-4 mt-8">
+              <div className="flex flex-col space-y-4 mt-8">
                 {navItems.map((item) => (
                   <a
                     key={item.href}
                     href={item.href}
-                    className="text-lg"
+                    className="text-lg py-2"
                     onClick={() => setIsOpen(false)}
                   >
                     {item.label}

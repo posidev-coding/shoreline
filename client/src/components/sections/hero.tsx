@@ -5,11 +5,9 @@ export default function Hero() {
   return (
     <section className="relative min-h-[calc(100vh-4rem)] flex items-center">
       <div
-        className="absolute inset-0 z-0"
+        className="absolute inset-0 z-0 bg-cover bg-center bg-no-repeat"
         style={{
-          backgroundImage: `linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.4)), url(https://images.unsplash.com/photo-1604599339387-51594e21c69b)`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
+          backgroundImage: `linear-gradient(to right, rgba(0,0,0,0.8), rgba(0,0,0,0.4)), url('https://images.unsplash.com/photo-1531265726475-52ad60219627?q=80&w=2940&auto=format&fit=crop')`,
         }}
       />
       <div className="container mx-auto px-4 relative z-10">

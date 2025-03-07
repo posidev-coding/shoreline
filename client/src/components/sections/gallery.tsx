@@ -27,7 +27,8 @@ export default function Gallery() {
         <div className="text-center mb-12">
           <h2 className="text-3xl font-bold mb-4">Our Work</h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            Browse through our portfolio of completed installations
+            {/* Browse through our portfolio of completed installations */}
+            These are some pictures of cool garage doors..
           </p>
         </div>
 

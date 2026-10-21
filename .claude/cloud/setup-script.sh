@@ -102,10 +102,13 @@ done
 service postgresql stop >/dev/null 2>&1 || pg_ctlcluster 16 main stop || true
 
 # --- Playwright (Pest 5 browser tests): OS libraries + Chromium in a shared path ---
+# Pinned so cache rebuilds don't drift: 1.64.1 ships Chromium build 1248. Bump it together
+# with package.json's "playwright" and PLAYWRIGHT_VERSION in .claude/hooks/cloud-session-start.sh.
+PLAYWRIGHT_VERSION=1.64.1
 export PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 mkdir -p "$PLAYWRIGHT_BROWSERS_PATH"
-log "Installing Playwright Chromium + system deps"
-npx -y playwright@latest install --with-deps chromium || log "WARN: Playwright install failed (check network allowlist)"
+log "Installing Playwright ${PLAYWRIGHT_VERSION} Chromium + system deps"
+npx -y "playwright@${PLAYWRIGHT_VERSION}" install --with-deps chromium || log "WARN: Playwright install failed (check network allowlist)"
 chmod -R a+rwX "$PLAYWRIGHT_BROWSERS_PATH" || true
 
 log "Done: $(php -v 2>/dev/null | head -1)"

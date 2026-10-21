@@ -20,31 +20,59 @@ log() { echo "[shoreline-setup] $*"; }
 # Check extensions, not just the binary: an optional package (pcov) pulls in
 # php8.5-cli on its own, so a failed core install still leaves `php8.5` on PATH.
 PHP_EXTS="pdo_pgsql pgsql mbstring dom xml curl zip intl bcmath gd pdo_sqlite"
+PHP_PKGS="php8.5-cli php8.5-common php8.5-readline php8.5-pgsql php8.5-sqlite3 php8.5-mbstring
+  php8.5-xml php8.5-curl php8.5-zip php8.5-intl php8.5-bcmath php8.5-gd"
 php_ok() {
   command -v php8.5 >/dev/null 2>&1 || return 1
   for e in $PHP_EXTS; do php8.5 -r "exit(extension_loaded('$e') ? 0 : 1);" || return 1; done
 }
-# The PPA intermittently answers 503 or times out, and a fresh VM can hold the dpkg lock.
 APT="apt-get -o Acquire::Retries=5 -o DPkg::Lock::Timeout=300"
+
+# ppa.launchpadcontent.net answers about half of all requests with a 503, and a
+# single .deb that runs out of apt's retries fails the whole install. So fetch
+# the .debs into apt's cache first: in parallel, curl retrying each file, and
+# renamed into place only when complete. apt then installs from the cache and
+# downloads (with its own retries) only what curl missed.
+prefetch_debs() {
+  $APT install -y --no-install-recommends --print-uris "$@" 2>/dev/null \
+    | awk -F"'" '/^.http/ { split($3, f, " "); print $2, "/var/cache/apt/archives/" f[1] }' \
+    | xargs -r -P 8 -n 2 sh -c 'curl -fsSL --retry 20 --retry-delay 2 --retry-all-errors -o "$1.part" "$0" \
+        && mv "$1.part" "$1" || { rm -f "$1.part"; echo "[shoreline-setup] WARN: prefetch failed: $0"; }'
+}
+apt_install() {
+  local pass
+  prefetch_debs "$@"
+  for pass in 1 2 3; do
+    $APT install -y --no-install-recommends "$@" && return 0
+    log "apt install pass ${pass} failed; retrying in 15s"
+    sleep 15
+  done
+  return 1
+}
 
 if ! php_ok; then
   log "Installing PHP 8.5 from ppa:ondrej/php"
   codename="$(. /etc/os-release && echo "$VERSION_CODENAME")"
-  curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C" \
+  curl -fsSL --retry 5 --retry-all-errors \
+    "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x14AA40EC0831756756D7F66C4F4EA0AAE5267A6C" \
     | gpg --dearmor --yes -o /usr/share/keyrings/ondrej-php.gpg
   echo "deb [signed-by=/usr/share/keyrings/ondrej-php.gpg] https://ppa.launchpadcontent.net/ondrej/php/ubuntu ${codename} main" \
     > /etc/apt/sources.list.d/ondrej-php.list
-  for attempt in 1 2 3; do
-    $APT update -y && $APT install -y --no-install-recommends \
-      php8.5-cli php8.5-common php8.5-readline php8.5-pgsql php8.5-sqlite3 \
-      php8.5-mbstring php8.5-xml php8.5-curl php8.5-zip php8.5-intl \
-      php8.5-bcmath php8.5-gd && break
-    log "PHP 8.5 install attempt ${attempt} failed (PPA flaky?); retrying in 20s"
-    sleep 20
+  # `apt-get update` only warns when an index 503s, so check the PPA's index actually loaded.
+  for pass in 1 2 3 4 5; do
+    $APT update -y && apt-cache show php8.5-cli >/dev/null 2>&1 && break
+    log "apt update pass ${pass} didn't load the PPA index; retrying in 10s"
+    sleep 10
   done
-  # Optional extensions: don't block the session if a build isn't published yet.
-  $APT install -y --no-install-recommends php8.5-imagick || log "WARN: php8.5-imagick unavailable"
-  $APT install -y --no-install-recommends php8.5-pcov || log "WARN: php8.5-pcov unavailable"
+  # shellcheck disable=SC2086 # word-split the package list on purpose
+  apt_install $PHP_PKGS || log "ERROR: PHP 8.5 core install failed"
+  # Optional extensions go after the core, so apt satisfies their phpapi-* dependency
+  # with php8.5-cli instead of pulling in php8.5-phpdbg. Never block the session on them.
+  if php_ok; then
+    for pkg in php8.5-imagick php8.5-pcov; do
+      { apt-cache show "$pkg" >/dev/null 2>&1 && apt_install "$pkg"; } || log "WARN: $pkg unavailable"
+    done
+  fi
 fi
 php_ok || { log "FATAL: PHP 8.5 or a required extension is missing (need: ${PHP_EXTS})"; exit 1; }
 

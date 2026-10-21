@@ -6,8 +6,8 @@ Setup happens in two places:
 
 | Where | What it does | When it runs |
 |---|---|---|
-| **Setup script**, pasted from [`setup-script.sh`](setup-script.sh) into the environment | Installs PHP 8.5, updates Composer, creates the Postgres role and databases, and installs Playwright Chromium with its system libraries | Once per cache build. The result is cached for about 7 days, or until the script or the network list changes |
-| **SessionStart hook**, [`../hooks/cloud-session-start.sh`](../hooks/cloud-session-start.sh) wired in [`../settings.json`](../settings.json) | Starts Postgres, runs `composer install` and `npm ci`, matches Playwright Chromium to the project's version, and creates `.env` | Every cloud session start and resume. It does nothing locally because it checks `CLAUDE_CODE_REMOTE` |
+| **Setup script**, pasted from [`setup-script.sh`](setup-script.sh) into the environment | Installs PHP 8.5 and its extensions (with retries), updates Composer and sets it to install from git source, creates the Postgres role and databases, and installs Playwright Chromium with its system libraries. Fails the cache build if PHP 8.5 or a required extension is missing | Once per cache build. The result is cached for about 7 days, or until the script or the network list changes |
+| **SessionStart hook**, [`../hooks/cloud-session-start.sh`](../hooks/cloud-session-start.sh) wired in [`../settings.json`](../settings.json) | Starts Postgres, runs `composer install` and `npm ci`, matches Playwright Chromium to the project's version, and creates `.env`. Its status line warns when PHP extensions, `vendor/`, or `node_modules/` are missing | Every cloud session start and resume. It does nothing locally because it checks `CLAUDE_CODE_REMOTE` |
 
 ## Environment settings (claude.ai/code → environment selector → `Shoreline` → edit)
 
@@ -72,6 +72,8 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 ## Gotchas in cloud sessions
 
 - **`gh pr` and `gh issue` return 403.** The GitHub proxy blocks GraphQL. Use `gh api` (REST) instead, or open the PR from the session's diff view.
+- **Composer can't download zips from GitHub.** The GitHub proxy returns 403 for `api.github.com/repos/…/zipball` and `codeload.github.com` on any repo outside the session, which is every package. Composer then fails with "Could not authenticate against github.com" and doesn't fall back to git. Public `git clone` works, so the setup script sets `composer config --global preferred-install source`, and the hook doesn't pass `--prefer-dist`. Expect slower first installs and `.git` folders in `vendor/`. This affects only cloud sessions: the Mac and Laravel Cloud deploys still install from zips.
+- **The ondrej PPA is flaky.** `ppa.launchpadcontent.net` intermittently answers 503 or times out. The setup script retries, and fails the build rather than leaving a PHP 8.5 with no extensions (`php -v` alone doesn't catch that).
 - **Services stop when the VM is reclaimed after idling.** The hook restarts Postgres on resume. Restart any dev server yourself (`php artisan serve`).
 - **Commands are capped:** foreground commands at 2–10 minutes, background commands about 30 more. Run long test suites in the background.
 - **Herd, `shoreline.test`, and `herd share` don't exist in the cloud.** Use `php artisan serve`, and leave OAuth and webhook tunnels to the local Mac.
@@ -82,5 +84,7 @@ PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 In a new cloud session, ask Claude to run:
 
 ```bash
-php -v && composer -V && node -v && pg_isready && psql "postgresql://shoreline:shoreline@127.0.0.1/shoreline" -c "select version()" && ls /opt/ms-playwright
+php -v && composer -V && node -v && pg_isready && psql "postgresql://shoreline:shoreline@127.0.0.1/shoreline" -c "select version()" && ls /opt/ms-playwright && php -r 'foreach (["pdo_pgsql","pgsql","mbstring","dom","xml","curl","zip","intl","bcmath","gd","pdo_sqlite"] as $e) if (!extension_loaded($e)) { fwrite(STDERR, "missing PHP extension: $e\n"); exit(1); } echo "PHP extensions OK\n";' && composer config --global preferred-install
 ```
+
+The last two commands should print `PHP extensions OK` and `source`.

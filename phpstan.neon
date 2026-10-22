@@ -1,0 +1,12 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+    level: 8
+    paths:
+        - app/
+        - bootstrap/app.php
+        - database/
+        - routes/
+    # Read each model's casts() body, so enum and date casts type its properties.
+    parseModelCastsMethod: true

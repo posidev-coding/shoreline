@@ -438,7 +438,7 @@ Conventions:
 - Whether the WAF lets Intuit webhook POSTs through.
 
 **Tooling**
-- The Playwright setup for the Pest 5 browser plugin.
+- ~~The Playwright setup for the Pest 5 browser plugin.~~ Verified in M0: pest-plugin-browser 5.1.2 drives Chromium build 1248 through the project's `playwright@1.64.1` (the plugin needs ≥ 1.63.0).
 
 ## Key references
 **Laravel Cloud docs**

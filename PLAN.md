@@ -26,7 +26,7 @@ The folder `/Users/taylorcox/Dev/Projects/shoreline` is empty (greenfield, not y
 | Public site | Blade + Livewire 4 (Alpine comes bundled, so it isn't installed separately) + Tailwind 4 + Vite |
 | Portal | Custom Livewire pages at `/portal`, on-brand, passwordless login |
 | DB | Postgres: DBngin locally (already installed), Laravel Serverless Postgres in production |
-| Files | Laravel Cloud Object Storage (R2) with **two buckets**. `private` is the default disk and holds client photos, quote uploads, documents, and Livewire temp uploads, served via `temporaryUrl`. `public_media` holds gallery and site imagery; `AWS_URL` has to be set manually for it |
+| Files | Laravel Cloud Object Storage (R2) with **two buckets**. `private` is the default disk and holds client photos, quote uploads, documents, and Livewire temp uploads, served via `temporaryUrl`. `public_media` holds gallery and site imagery. Cloud passes each bucket's public URL to its disk (confirmed on staging in M0), so `AWS_URL` isn't needed |
 | Queue | Cloud Managed Queue (`QUEUE_CONNECTION=cloud`), Flex, 1 GiB memory. Jobs must finish in < 90 s, and delays/backoff can't exceed 900 s |
 | Mail | Cloudflare Email Sending over SMTP (`MAIL_SCHEME=smtps`, `smtp.mx.cloudflare.net:465`, user `api_token`), always queued. Emails carry links rather than attachments (5 MiB cap). Cloudflare Email Routing forwards inbound `hello@` to the owner |
 | Tests/quality | **Pest 5** + pest-plugin-browser, Larastan 3, Pint, Laravel Boost (dev) |
@@ -431,9 +431,9 @@ Conventions:
 - Whether `:` is allowed in DisplayName.
 
 **Laravel Cloud**
-- Whether Cloud's imagick reads HEIC.
-- Whether pg_trgm is available.
-- Whether outbound SMTP on port 465 works.
+- ~~Whether Cloud's imagick reads HEIC.~~ Verified on staging in M0: imagick lists HEIC, HEIF, AVIF, and WEBP as readable. In M2, also decode a real iPhone photo, since a listed format doesn't prove every HEIC variant decodes.
+- ~~Whether pg_trgm is available.~~ Verified on staging in M0: pg_trgm 1.6 is available, not yet installed. The first migration that needs it runs `create extension if not exists pg_trgm`. pg_trgm is a trusted extension, so the app's role should be allowed to create it; that migration's deploy confirms it.
+- ~~Whether outbound SMTP on port 465 works.~~ Verified on staging in M0: `smtp.mx.cloudflare.net:465` is reachable over TLS (55 ms), and a queue worker delivered a test message through Cloudflare.
 - Whether Livewire's S3 temp-upload cleanup works with Cloud keys.
 - Whether the WAF lets Intuit webhook POSTs through.
 

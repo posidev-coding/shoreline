@@ -434,6 +434,7 @@ Conventions:
 - ~~Whether Cloud's imagick reads HEIC.~~ Verified on staging in M0: imagick lists HEIC, HEIF, AVIF, and WEBP as readable. In M2, also decode a real iPhone photo, since a listed format doesn't prove every HEIC variant decodes.
 - ~~Whether pg_trgm is available.~~ Verified on staging in M0: pg_trgm 1.6 is available, not yet installed. The first migration that needs it runs `create extension if not exists pg_trgm`. pg_trgm is a trusted extension, so the app's role should be allowed to create it; that migration's deploy confirms it.
 - ~~Whether outbound SMTP on port 465 works.~~ Verified on staging in M0: `smtp.mx.cloudflare.net:465` is reachable over TLS (55 ms), and a queue worker delivered a test message through Cloudflare.
+- Whether Cloud's edge caches HTML. M1's content routes send `Cache-Control: public, s-maxage=600` with no cookies, but by default Cloudflare caches only static file types. Check `cf-cache-status` on staging ([docs/laravel-cloud.md](docs/laravel-cloud.md), step 6).
 - Whether Livewire's S3 temp-upload cleanup works with Cloud keys.
 - Whether the WAF lets Intuit webhook POSTs through.
 

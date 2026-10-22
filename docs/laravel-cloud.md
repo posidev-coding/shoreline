@@ -85,7 +85,7 @@ It exits non-zero unless every required row passes:
 
 The INFO rows answer PLAN.md's Cloud spike: whether imagick reads HEIC, whether `pg_trgm` is available, and whether outbound 465 is open. Copy them into PLAN.md's "Unverified" section.
 
-**If the `public_media` row fails** with a 4xx from a URL on the R2 endpoint, Cloud didn't pass the bucket's public URL through to the disk. Copy the public URL from the bucket's settings page into a custom variable (`AWS_URL` in Cloud's docs), and tell Claude, so `config/filesystems.php` can read it for `public_media`. This is the one part of the setup that couldn't be checked in advance.
+Staging confirmed in M0 that Cloud passes the public bucket's URL through to `public_media`, so don't set `AWS_URL`, despite what Cloud's object storage docs say. That advice applies to apps that read the generic `AWS_*` variables.
 
 ## Not yet covered
 

@@ -42,6 +42,10 @@ migrate_ok=1
     # global 1.56.1 and downloads a Chromium build the project can't use.
     if grep -q '"playwright"' package.json && [ -x node_modules/.bin/playwright ]; then
       node_modules/.bin/playwright install chromium
+      # A restored VM loads its disk lazily (about 80 MB/s on first read), so the first
+      # headless Chromium launch can outlast the browser plugin's 5 s timeout. Read it once now.
+      find "${PLAYWRIGHT_BROWSERS_PATH:-/opt/ms-playwright}" -path '*chromium_headless_shell-*' -type f \
+        -exec cat {} + >/dev/null 2>&1 || true
     fi
   fi
 

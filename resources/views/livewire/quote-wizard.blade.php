@@ -146,26 +146,48 @@
                     <p class="mt-2 text-navy-700">Optional, but they often save a trip. Up to {{ Lead::MAX_PHOTOS }}: the whole door from outside, the springs above it, the opener, and anything broken.</p>
                 </div>
 
+                {{--
+                    One upload per photo, in turn. Livewire uploads to a bucket (as on Laravel Cloud) only one file at a
+                    time, and its own queue starts the last waiting upload rather than the next, so this keeps the order.
+                    A single upload to an array property is appended to it, which runs QuoteWizard::updatedPhotos().
+                --}}
                 <div
-                    x-data="{ uploading: false, progress: 0 }"
-                    x-on:livewire-upload-start="uploading = true; progress = 0"
-                    x-on:livewire-upload-finish="uploading = false"
-                    x-on:livewire-upload-error="uploading = false"
-                    x-on:livewire-upload-cancel="uploading = false"
-                    x-on:livewire-upload-progress="progress = $event.detail.progress"
+                    x-data="{
+                        uploading: false,
+                        progress: 0,
+                        current: 0,
+                        total: 0,
+                        skipped: 0,
+                        async send(files) {
+                            const room = Math.max({{ Lead::MAX_PHOTOS }} - $wire.photos.length, 0);
+                            const queue = Array.from(files).slice(0, room);
+                            this.skipped = files.length - queue.length;
+                            this.total = queue.length;
+                            this.uploading = queue.length > 0;
+
+                            for (const [index, file] of queue.entries()) {
+                                this.current = index + 1;
+                                this.progress = 0;
+                                await new Promise((done) => $wire.upload('photos', file, done, done, (event) => this.progress = event.detail.progress, done));
+                            }
+
+                            this.uploading = false;
+                        },
+                    }"
                 >
                     @if (count($photos) < Lead::MAX_PHOTOS)
-                        <input id="photos" type="file" wire:model="photos" multiple accept="image/*,.heic,.heif" class="peer sr-only">
+                        <input id="photos" type="file" multiple accept="image/*,.heic,.heif" class="peer sr-only" x-on:change="send($event.target.files); $event.target.value = ''" x-bind:disabled="uploading">
                         <label for="photos" class="inline-flex cursor-pointer items-center gap-2 rounded-md bg-navy-900 px-6 py-3 font-bold tracking-wide text-sand-100 transition peer-focus-visible:outline-3 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-signal-500 hover:bg-navy-800">
                             <x-heroicon-o-camera class="size-5" aria-hidden="true" /> {{ count($photos) === 0 ? 'Add photos' : 'Add more photos' }}
                         </label>
                     @endif
 
                     <div x-show="uploading" x-cloak class="mt-4" role="status">
-                        <p class="text-sm font-semibold text-navy-700">Uploading… <span x-text="progress + '%'"></span></p>
+                        <p class="text-sm font-semibold text-navy-700">Uploading photo <span x-text="current"></span> of <span x-text="total"></span>… <span x-text="progress + '%'"></span></p>
                         <div class="mt-2 h-2 overflow-hidden rounded-full bg-navy-100"><div class="h-full bg-signal-500 transition-all" :style="`width: ${progress}%`"></div></div>
                     </div>
 
+                    <p x-show="skipped > 0" x-cloak class="mt-3 text-sm font-semibold text-red-700">Up to {{ Lead::MAX_PHOTOS }} photos, so <span x-text="skipped"></span> of them didn’t fit.</p>
                     @error('photos') <p class="mt-3 text-sm font-semibold text-red-700">{{ $message }}</p> @enderror
                     @error('photos.*') <p class="mt-3 text-sm font-semibold text-red-700">{{ $message }}</p> @enderror
 

@@ -39,6 +39,7 @@ Several packages changed majors recently (Filament 5, Livewire 4, Pest 5, spatie
 - **HEIC photos** need Imagick with libheif's HEVC decoder (on Ubuntu, `libheif-plugin-libde265`). Imagick lists HEIC without it but can't decode one.
 - In one test, the `Vite` singleton remembers preloaded assets between requests, so a second request renders different HTML; call `app(Vite::class)->flush()` between them.
 - The browser plugin's `click()` reads text containing CSS characters, like a comma, as a selector. Use a CSS selector for those.
+- **Livewire temporary uploads go straight to the bucket on Cloud, which takes one file per upload.** Never put `wire:model` on a `multiple` file input: Livewire throws on S3. Upload each file with `$wire.upload()` instead, as the quote wizard does. Local disks accept both, so check upload changes against an S3 emulator.
 - The browser plugin's in-process server doesn't parse the `files[]` array Livewire uploads with, so uploads can't be tested in tests/Browser. Test them with `Livewire::test()->set('photos', [...])`.
 
 ## Claude Code cloud sessions

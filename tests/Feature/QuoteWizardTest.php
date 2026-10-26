@@ -140,6 +140,15 @@ it('takes six photos at most', function () {
         ->assertHasErrors('photos');
 });
 
+it('uploads photos one at a time, since a bucket takes only single-file uploads', function () {
+    // Livewire throws on a multiple upload to S3 (as on Laravel Cloud), and local disks don't, so pin the markup.
+    Livewire::test(QuoteWizard::class)
+        ->set('step', QuoteWizard::PHOTOS)
+        ->assertSeeHtml('type="file" multiple')
+        ->assertDontSeeHtml('wire:model="photos"')
+        ->assertSeeHtml("\$wire.upload('photos', file");
+});
+
 it('lets someone remove a photo', function () {
     Livewire::test(QuoteWizard::class)
         ->set('photos', [UploadedFile::fake()->image('a.jpg'), UploadedFile::fake()->image('b.jpg')])

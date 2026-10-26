@@ -155,10 +155,12 @@ Conventions:
 - Canonical URLs, per-page meta, responsive WebP from medialibrary conversions for public media only.
 - Target Lighthouse ≥ 95 on mobile.
 
-**Edge caching (offsets scale-to-zero):**
-- Content routes (home, services, areas, work, FAQ) use a lean middleware group with no session or cookies.
-- They send `Cache-Control: public, s-maxage=600, stale-while-revalidate`, so Laravel Cloud's edge serves most visitors without waking the app.
-- The quote, portal, and admin routes keep the full `web` stack. Cloud purges the edge cache on every deploy.
+**Caching and scale-to-zero:**
+- Content routes (home, services, areas, work, FAQ) use a lean middleware group with no session or cookies, so a page view writes nothing to the database.
+- They send `Cache-Control: public, s-maxage=600, stale-while-revalidate`, but Laravel Cloud's shared edge caches only static file types, never HTML (verified on staging in M1). Every page view reaches the app. Per-path cache rules need a Private Cloud dedicated edge.
+- What keeps a sleeping environment fast is a current Flex size, which wakes in under 500 ms. Legacy Flex sizes take 5 to 20 s.
+- Don't proxy the domain through our own Cloudflare zone to add a cache rule there. Cloud's purge on deploy wouldn't reach that cache, so after each deploy it would serve old pages that point at deleted CSS and JS files.
+- The quote, portal, and admin routes keep the full `web` stack.
 
 ## Admin (Filament v5)
 - **Dashboard:**
@@ -310,7 +312,7 @@ Conventions:
 **M1 Brand + public site**
 - Design tokens, wordmark, door-rollup hero, all pages.
 - Filament content resources (services, areas, FAQs, testimonials, showcases, settings) with MFA.
-- SEO baseline and edge caching.
+- SEO baseline and cookie-free content routes.
 - Going live here also unblocks the Intuit questionnaire, since it needs the privacy and EULA URLs.
 
 **M2 Leads**
@@ -396,7 +398,7 @@ Conventions:
   - The Cloud Queues dashboard shows jobs processing.
   - The scheduler fires the hourly sweep.
   - The sitemap route is valid.
-  - A content page's edge cache hits while the app is asleep.
+  - A content page answers in about a second while the environment is asleep.
 
 ## What Taylor or the owner will provide
 - A Laravel Cloud account and a GitHub repo.
@@ -434,7 +436,7 @@ Conventions:
 - ~~Whether Cloud's imagick reads HEIC.~~ Verified on staging in M0: imagick lists HEIC, HEIF, AVIF, and WEBP as readable. In M2, also decode a real iPhone photo, since a listed format doesn't prove every HEIC variant decodes.
 - ~~Whether pg_trgm is available.~~ Verified on staging in M0: pg_trgm 1.6 is available, not yet installed. The first migration that needs it runs `create extension if not exists pg_trgm`. pg_trgm is a trusted extension, so the app's role should be allowed to create it; that migration's deploy confirms it.
 - ~~Whether outbound SMTP on port 465 works.~~ Verified on staging in M0: `smtp.mx.cloudflare.net:465` is reachable over TLS (55 ms), and a queue worker delivered a test message through Cloudflare.
-- Whether Cloud's edge caches HTML. M1's content routes send `Cache-Control: public, s-maxage=600` with no cookies, but by default Cloudflare caches only static file types. Check `cf-cache-status` on staging ([docs/laravel-cloud.md](docs/laravel-cloud.md), step 6).
+- ~~Whether Cloud's edge caches HTML.~~ Verified on staging in M1: it doesn't. `/services`, sent with `public, s-maxage=600` and no app cookies, came back `cf-cache-status: DYNAMIC`. The shared edge caches by file extension only. Staging runs a current Flex size, which wakes in under 500 ms, so the site doesn't need the HTML cache.
 - Whether Livewire's S3 temp-upload cleanup works with Cloud keys.
 - Whether the WAF lets Intuit webhook POSTs through.
 

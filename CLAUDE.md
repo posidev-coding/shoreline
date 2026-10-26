@@ -29,7 +29,7 @@ Several packages changed majors recently (Filament 5, Livewire 4, Pest 5, spatie
 - **Queue jobs** run on a Cloud Flex managed queue: finish in under 90 s, and keep delays and backoff at or under 900 s.
 - **Scheduled tasks** run no more often than hourly, so the environment can scale to zero.
 - `users.role` (`super_admin | owner | client`) is not mass-assignable. Only super admins and owners get into `/admin`.
-- **Public content routes** go in `routes/content.php`, which runs the `content` middleware group: no session and no cookies, so Laravel Cloud's edge can cache the page for 10 minutes. Anything that needs the session, CSRF, or a flash message goes in `routes/web.php`.
+- **Public content routes** go in `routes/content.php`, which runs the `content` middleware group: no session and no cookies, so a page view writes nothing to the database. Laravel Cloud's shared edge caches only static files, never HTML, so every page view reaches the app. Anything that needs the session, CSRF, or a flash message goes in `routes/web.php`.
 - **Site copy** never promises what isn't built yet (online quote requests, estimate approval, the client portal), and reviews and jobs are seeded only locally: published ones must be real.
 - **Brand contrast**: orange (`signal`) buttons take navy text, and orange text on a light background is `signal-700`.
 - spatie/laravel-settings parses `@var` on settings properties and crashes on array shapes, so array properties get `@phpstan-var` only.

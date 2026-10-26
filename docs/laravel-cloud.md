@@ -38,6 +38,7 @@ Don't add `storage:link`, `queue:restart`, or `optimize:clear`. Cloud either han
 | **Bucket 1** | Laravel Object Storage, visibility **Private**, disk name **`private`**, **default disk** on. Jurisdiction United States |
 | **Bucket 2** | Laravel Object Storage, visibility **Public**, disk name **`public_media`**. Jurisdiction United States |
 | **Managed queue** | Standard (not FIFO), **Flex**, **1 GiB**, autoscaling 0 to 3 workers. Cloud sets `QUEUE_CONNECTION=cloud` |
+| **App cluster** | A current Flex size, not a legacy one, with Scale to Zero on. Current Flex sizes wake in under 500 ms; legacy ones take 5 to 20 s, and the edge doesn't cache pages to hide that |
 | **Scheduler** | Turn the Scheduler toggle on for the App cluster |
 | **Cache** | None. Cache and sessions use the database |
 
@@ -109,15 +110,15 @@ Run these once per environment, in the **Commands** tab.
 
 3. Fill in **Settings → Business details** in `/admin`. The dashboard's launch checklist lists what's still a placeholder, including the legal pages marked DRAFT.
 
-4. Check that the edge caches content pages. Run this twice, a few seconds apart:
+4. Check that a sleeping environment answers quickly. Send it no traffic for longer than its sleep timeout, so it scales to zero, then run:
 
    ```sh
-   curl -sI -u user:password https://<staging-host>/services | grep -iE 'cache-control|cf-cache-status|set-cookie'
+   curl -s -o /dev/null -w '%{http_code} %{time_starttransfer}s\n' -u user:password https://<staging-host>/services
    ```
 
-   Expect `cache-control: public, s-maxage=600, stale-while-revalidate=86400`, no `set-cookie`, and `cf-cache-status: HIT` the second time. Nothing local can prove the HIT: if it says `DYNAMIC` or `BYPASS`, staging's basic auth or a Cloud setting is the cause, and it needs working out before production.
+   Expect `200` in about a second. Five seconds or more means the App cluster runs a legacy Flex size, so switch it to a current one.
 
-Once caching works, an edit in `/admin` can take up to 10 minutes to show on the site.
+Laravel Cloud's edge caches only static files, not pages (`cf-cache-status: DYNAMIC` on a page is expected), so an edit in `/admin` shows on the site right away.
 
 ## Not yet covered
 

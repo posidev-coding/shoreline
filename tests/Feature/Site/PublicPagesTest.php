@@ -98,10 +98,10 @@ it('prefills the quote page from a service', function () {
     $this->get('/get-a-quote?service=springs-and-cables')
         ->assertOk()
         ->assertSee('Springs & Cables')
-        ->assertSee('subject=Quote%20request%3A%20Springs%20%26%20Cables', false);
+        ->assertSee('What’s going on?', false);
 });
 
-it('scores the hurricane check and adds the answers to the email', function () {
+it('scores the hurricane check and carries the answers into the request', function () {
     $this->get('/get-a-quote?'.http_build_query([
         'service' => 'hurricane-wind-rated-doors',
         'age' => 'over-20',
@@ -111,7 +111,7 @@ it('scores the hurricane check and adds the answers to the email', function () {
     ]))
         ->assertOk()
         ->assertSee('Have someone look at it before the next storm.')
-        ->assertSee(rawurlencode('Can you find a wind-load label on the door? No'), false);
+        ->assertSee('Your hurricane-ready answers come with this request');
 });
 
 it('shows no hurricane result for too few or invalid answers', function () {

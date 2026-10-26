@@ -2,7 +2,11 @@
 
 namespace Database\Seeders;
 
+use App\Enums\ContactMethod;
+use App\Enums\LeadStatus;
 use App\Enums\ReviewSource;
+use App\Enums\Urgency;
+use App\Models\Lead;
 use App\Models\Service;
 use App\Models\ServiceArea;
 use App\Models\Showcase;
@@ -11,9 +15,10 @@ use Illuminate\Database\Seeder;
 use RuntimeException;
 
 /**
- * Sample jobs and reviews so the gallery, slider, and review cards have something to show
- * in local development. Every review is labeled as a demo, and this refuses to run outside
- * the local environment: published reviews must be real.
+ * Sample jobs, reviews, and quote requests so the gallery, slider, review cards, and lead
+ * inbox have something to show in local development. Every review and request is labeled
+ * as a demo, and this refuses to run outside the local environment: published reviews
+ * must be real.
  */
 class DemoSeeder extends Seeder
 {
@@ -49,6 +54,10 @@ class DemoSeeder extends Seeder
             }
         }
 
+        if (Lead::query()->doesntExist()) {
+            $this->leads();
+        }
+
         if (Testimonial::query()->doesntExist()) {
             foreach (['beaufort', 'emerald-isle', 'morehead-city'] as $index => $area) {
                 Testimonial::query()->create([
@@ -61,6 +70,50 @@ class DemoSeeder extends Seeder
                     'is_featured' => $index === 0,
                     'is_published' => true,
                 ]);
+            }
+        }
+    }
+
+    /**
+     * Three quote requests for the inbox, all at example.com addresses.
+     */
+    private function leads(): void
+    {
+        $leads = [
+            ['service' => 'garage-door-repair', 'area' => 'beaufort', 'urgency' => Urgency::Emergency, 'status' => LeadStatus::New, 'preferred' => ContactMethod::Text,
+                'answers' => ['door_size' => 'double', 'symptoms' => ['spring', 'wont-move']], 'message' => 'Demo request: heard a bang and the door won’t lift.', 'age' => 2],
+            ['service' => 'hurricane-wind-rated-doors', 'area' => 'emerald-isle', 'urgency' => Urgency::Flexible, 'status' => LeadStatus::New, 'preferred' => ContactMethod::Email,
+                'answers' => ['door_size' => 'single', 'style' => 'carriage-house', 'hurricane' => ['age' => 'over-20', 'label' => 'no', 'windows' => 'standard']], 'message' => null, 'age' => 26],
+            ['service' => 'handyman-home-repairs', 'area' => 'morehead-city', 'urgency' => Urgency::Soon, 'status' => LeadStatus::Contacted, 'preferred' => ContactMethod::Call,
+                'answers' => [], 'message' => 'Demo request: replace a rotted porch step and rehang a sticking door.', 'age' => 72],
+        ];
+
+        foreach ($leads as $index => $data) {
+            $area = ServiceArea::query()->where('slug', $data['area'])->firstOrFail();
+
+            $lead = Lead::query()->create([
+                'status' => $data['status'],
+                'service_id' => Service::query()->where('slug', $data['service'])->value('id'),
+                'urgency' => $data['urgency'],
+                'answers' => $data['answers'],
+                'message' => $data['message'],
+                'name' => 'Demo Customer '.($index + 1),
+                'email' => 'demo'.($index + 1).'@example.com',
+                'phone' => '+125255501'.($index + 10),
+                'preferred_contact' => $data['preferred'],
+                'sms_consent' => $data['preferred'] === ContactMethod::Text,
+                'street' => (100 + $index * 7).' Demo St',
+                'town' => $area->name,
+                'zip' => '28557',
+                'service_area_id' => $area->getKey(),
+                'attribution' => ['landing_page' => '/services/'.$data['service'], 'utm_source' => 'demo'],
+                'contacted_at' => $data['status'] === LeadStatus::Contacted ? now()->subHours($data['age'] - 4) : null,
+            ]);
+            $lead->forceFill(['created_at' => now()->subHours($data['age'])])->save();
+
+            if ($index === 0) {
+                $lead->addMedia($this->door(rusted: true))->usingName('IMG_0412')->toMediaCollection('photos');
+                $lead->addMedia($this->door(rusted: false))->usingName('IMG_0413')->toMediaCollection('photos');
             }
         }
     }

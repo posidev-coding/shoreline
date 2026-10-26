@@ -1,9 +1,17 @@
 <x-layouts.site :seo="$seo">
+    @if (\App\Livewire\QuoteWizard::usesTurnstile())
+        @push('head')
+            {{-- Explicit rendering: the wizard renders the widget once Alpine and this script are both ready. --}}
+            <script>window.onTurnstileReady = () => window.dispatchEvent(new Event('turnstile:ready'))</script>
+            <script src="https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit&onload=onTurnstileReady" async defer></script>
+        @endpush
+    @endif
+
     <x-site.page-header title="Get a Quote" :breadcrumbs="$seo->breadcrumbs" :eyebrow="$service?->name">
-        Tell us about the door or the job, and where it is. We’ll get back to you with next steps.
+        Tell us what you need and where, add a few photos if you can, and we’ll get back to you.
     </x-site.page-header>
 
-    <div class="mx-auto max-w-3xl space-y-10 px-4 py-16 sm:px-6">
+    <div class="mx-auto max-w-3xl space-y-10 px-4 py-12 sm:px-6 sm:py-16">
         @if ($readiness->hasResult())
             <section @class([
                 'rounded-xl border-l-8 bg-white p-6 shadow-sm',
@@ -18,18 +26,12 @@
             </section>
         @endif
 
-        <section class="rounded-xl bg-navy-900 p-8 text-sand-200">
-            <h2 class="font-display text-3xl font-extrabold tracking-wide text-white uppercase">Request a quote</h2>
-            <p class="mt-2 leading-relaxed">
-                Online quote requests with photos are on the way. For now, call, or send an email.
-                {{ $readiness->hasResult() ? 'We’ve started it for you with your answers.' : 'We’ve started it for you.' }}
+        <livewire:quote-wizard :service-slug="$service?->slug" :quiz-answers="$readiness->answers" />
+
+        @unless ($site->hasPlaceholderPhone())
+            <p class="text-center text-navy-700">
+                Rather talk it through? Call <a href="{{ $site->phoneHref() }}" class="font-semibold text-signal-700 underline underline-offset-2">{{ $site->phoneForDisplay() }}</a>.
             </p>
-            <div class="mt-6 flex flex-wrap gap-3">
-                <x-site.button :href="$mailto" size="lg"><x-heroicon-o-envelope class="size-5" aria-hidden="true" /> Email us</x-site.button>
-                <x-site.button :href="$site->phoneHref()" variant="outline-light" size="lg">
-                    <x-heroicon-o-phone class="size-5 text-signal-500" aria-hidden="true" /> {{ $site->phoneForDisplay() }}
-                </x-site.button>
-            </div>
-        </section>
+        @endunless
     </div>
 </x-layouts.site>

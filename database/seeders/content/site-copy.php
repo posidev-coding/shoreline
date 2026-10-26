@@ -482,6 +482,7 @@ return [
                 .'<li>Property details you choose to share, such as gate or lockbox codes and the name of an on-site or rental-management contact</li>'
                 .'<li>Messages you send us through the client portal or by email</li>'
                 .'<li>Your approval of an estimate, including the name you type, the date and time, and your IP address and browser details</li>'
+                .'<li>With a quote request: the date and time, your IP address, whether you agreed to texts or reminders, and how you found us (the first page you visited, the site that sent you there, and any campaign tags in that link)</li>'
                 .'</ul>'
                 .'<p><strong>Information from others.</strong> A property manager, landlord, or family member may give us your contact details so we can reach you about work at a property.</p>'
                 .'<p><strong>Information collected automatically.</strong> Like most websites, our servers record basic technical information when you visit, such as your IP address, browser type, and the pages you request. We use it to run and secure the site.</p>'
@@ -520,6 +521,7 @@ return [
 
                 .'<h2>Cookies</h2>'
                 .'<p>Our public pages, such as our services, service area, and FAQ pages, do not set cookies. When you use a form, such as the quote request, or sign in to the client portal, we set cookies that are needed to keep you signed in and to protect forms from forgery. We do not use advertising or tracking cookies.</p>'
+                .'<p>Our pages do keep one note in your browser\'s local storage: the first page you visited, the site that sent you there, and any campaign tags in that link. It is sent to us only if you send a quote request, so we know how you found us, and we stop using it after 90 days.</p>'
 
                 .'<h2>Spam protection and analytics</h2>'
                 .'<p><strong>Cloudflare Turnstile.</strong> Our forms use Cloudflare Turnstile to tell people from bots. Turnstile checks technical signals from your browser and connection, such as your IP address and browser details. Cloudflare states that it uses these signals to detect and block bots, not to identify, profile, or target individuals.</p>'

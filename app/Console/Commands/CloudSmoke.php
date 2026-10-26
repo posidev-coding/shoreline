@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
 use Illuminate\Support\Str;
 use Imagick;
+use ImagickException;
 use Throwable;
 
 /**
@@ -27,6 +28,9 @@ use Throwable;
 #[Description('Check that this environment can store files, run queued jobs, and send mail')]
 class CloudSmoke extends Command
 {
+    /** A 320×240 HEIC (tests/Fixtures/door.heic), to prove Imagick can decode one. */
+    private const string HEIC_SAMPLE = 'AAAAHGZ0eXBoZWljAAAAAG1pZjFoZWljbWlhZgAAAVZtZXRhAAAAAAAAACFoZGxyAAAAAAAAAABwaWN0AAAAAAAAAAAAAAAAAAAAACJpbG9jAAAAAERAAAEAAQAAAAABegABAAAAAAAAAukAAAAjaWluZgAAAAAAAQAAABVpbmZlAgAAAAABAABodmMxAAAAAA5waXRtAAAAAAABAAAA1mlwcnAAAAC3aXBjbwAAAHhodmNDAQNwAAAAkAAAAAAAPPAA/P34+AAADwNgAAEAGEABDAH//wNwAAADAJAAAAMAAAMAPLoCQGEAAQArQgEBA3AAAAMAkAAAAwAAAwA8oAoIDxZbqSSmubgIaDAgAAADAyAAAAMAIWIAAQAHRAHBcrBiQAAAABNjb2xybmNseAABAA0ABoAAAAAUaXNwZQAAAAAAAAFAAAAA8AAAABBwaXhpAAAAAAMICAgAAAAXaXBtYQAAAAAAAAABAAEEgQIDBAAAAvFtZGF0AAAC5SgBrwnIJLzVkkAhOXVfX/6G9//+BOchzsEdBxhqpWjvjypY//R5rzc9e5up3S7tdf4S/cxY4txCNIhd4cu9epkqSLrvIByD4QH42CsejR/umkTetlqE3YMiGHQw6WPR4sEX8GW4QmBGoKUtCPmy4IIW+RM4uPUZ+fvGMasyCOEeE1gCyFayOZTqmyZdfTz6WCZeZK60vcxtodvBCjxsICRipBNweV4Sr+oKSucpZzAinj2BPmIc9NpZiWBmUMoIc3DO5L+4eFEYOfEouVGj7cabbH+QEt1KwNFJZS+GwL9DlSgClJbB7PFW001xSPWWMEgkSywSFL4GpZXoqdH95gL3nLbYTdGD8SRQeOo1Oh75QUj/r2iKBLS/Bhfa3zCdLt03hS2e2A6k/D5sLeF4W4X/GldRTCaYdw4c4GFMpqCEeBAHKeq2vdYtl9457sqYXszNQ7T1QiSLWYmrv/OYhWrgJCEeiQ+7tssQqWtFGcwwdQaw/NP/R5r38cQY8ltrK9398ReKqgUDHNNcCcAZ4KlpQvf/cBH6kSkZMovw0ZWBrYC1SrO1loFz2TGUulOdF3ORcAeEstSEkahPwIpyikAZ606lqPeF7AP5q2I8Pe2fz/4PUOQAAAMAQUhrfst/eIghCRZMYABbjIAm/loiH/+PZc8kbYEXJ+Dy4GIZ7isZCwJLuIWdTMdW9B2r7sP9cL4jfb+G+m9rTTsEn9KtVWjttlwvVLDCiHjVM3zxc2NW1cVC4aZlQt/P51DTRBTX+7F1qAke7wZ6xHtTBLME5WXYkPRwSVyQ1eEiv3cyfEskBVuRTrv+2KhefH/1l4vjUZox1IfD/jV9H6XL2A7F2QSk3fv+xfmgzQvnWpy3rsvwEUNk9TFc6Mbhav4hynjUQAwcM5qOI3SZFatq5i2I9VPSuuvO2z51uAPZSVgKJLgpFnDjMCKXnGjn/b1thXDwtoSgxarjPxDUwqVcHzoeFyLhiI/XYA==';
+
     /** @var list<array{string, string, string}> */
     private array $rows = [];
 
@@ -127,6 +131,10 @@ class CloudSmoke extends Command
         return null;
     }
 
+    /**
+     * Decodes a real HEIC rather than trusting queryFormats(): Imagick lists HEIC even when
+     * libheif's HEVC decoder plugin is missing, and then can't open an iPhone photo.
+     */
     private function imagickSupport(): string
     {
         if (! extension_loaded('imagick')) {
@@ -134,8 +142,19 @@ class CloudSmoke extends Command
         }
 
         $formats = array_values(array_intersect(['HEIC', 'HEIF', 'AVIF', 'WEBP'], Imagick::queryFormats()));
+        $listed = 'Lists '.($formats === [] ? 'none of HEIC, HEIF, AVIF, WEBP' : implode(', ', $formats));
+        $sample = (string) tempnam(sys_get_temp_dir(), 'heic-');
+        file_put_contents($sample, base64_decode(self::HEIC_SAMPLE));
 
-        return 'Loaded; reads '.($formats === [] ? 'none of HEIC, HEIF, AVIF, WEBP' : implode(', ', $formats));
+        try {
+            $image = new Imagick($sample);
+
+            return "{$listed}; decoded a HEIC photo ({$image->getImageWidth()}×{$image->getImageHeight()})";
+        } catch (ImagickException $exception) {
+            return "{$listed}; can’t decode HEIC, so iPhone photos stay HEIC ({$exception->getMessage()})";
+        } finally {
+            unlink($sample);
+        }
     }
 
     private function pgTrgmStatus(): string

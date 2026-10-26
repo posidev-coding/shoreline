@@ -65,6 +65,14 @@ MAIL_FROM_NAME="${APP_NAME}"
 
 `MAIL_PASSWORD` is a Cloudflare API token with Email Sending permission. Store it in Cloud's **Secrets Manager**, not as a plain variable. Cloudflare only sends from a domain that's onboarded to Email Sending, so `shorelinedoors.com` has to be on Cloudflare first.
 
+From M2, the quote form uses Cloudflare Turnstile. In the Cloudflare dashboard, add a Turnstile widget (Managed mode) whose hostnames are the environment's domains, then set:
+
+```ini
+TURNSTILE_SITE_KEY=<the widget's site key>
+```
+
+Put `TURNSTILE_SECRET_KEY` in the Secrets Manager. Without both, the form still works, guarded only by its honeypot and hourly limit, and the dashboard's launch checklist says the check is off.
+
 Don't set `DB_*`, `AWS_*`, `FILESYSTEM_DISK`, or `QUEUE_CONNECTION` by hand: custom variables override the injected ones.
 
 ## 5. Check that M0 is done
@@ -84,7 +92,7 @@ It exits non-zero unless every required row passes:
 | Queue | The managed queue woke a worker and ran a job |
 | Mail | That worker sent mail through Cloudflare SMTP on port 465 (then check the inbox) |
 
-The INFO rows answer PLAN.md's Cloud spike: whether imagick reads HEIC, whether `pg_trgm` is available, and whether outbound 465 is open. Copy them into PLAN.md's "Unverified" section.
+The INFO rows answer PLAN.md's Cloud spike: whether imagick decodes HEIC (it decodes a sample, since listing the format proves nothing), whether `pg_trgm` is available, and whether outbound 465 is open. Copy them into PLAN.md's "Unverified" section.
 
 Staging confirmed in M0 that Cloud passes the public bucket's URL through to `public_media`, so don't set `AWS_URL`, despite what Cloud's object storage docs say. That advice applies to apps that read the generic `AWS_*` variables.
 
@@ -120,6 +128,16 @@ Run these once per environment, in the **Commands** tab.
 
 Laravel Cloud's edge caches only static files, not pages (`cf-cache-status: DYNAMIC` on a page is expected), so an edit in `/admin` shows on the site right away.
 
+## 7. After the M2 deploy
+
+1. Run `php artisan app:cloud-smoke` again. The Imagick row should say **decoded a HEIC photo**. If it says **can’t decode HEIC**, Cloud's libheif lacks its HEVC decoder: iPhone photos still arrive, but stay HEIC (Safari shows them, other browsers download them). Tell Claude the output.
+2. Create the owner's account with `php artisan app:create-admin <email> --owner`. Until one exists, new-lead alerts go to the super admins.
+3. From an iPhone, send a real quote request with two or three photos, at least one taken by the camera (HEIC). Then check:
+   - the owner's alert email arrives, and replying to it goes to the address you entered;
+   - the confirmation email arrives at that address;
+   - in `/admin`, under **Quote requests**, the photos show as thumbnails;
+   - under **Where they came from**, the IP address is your phone's public address, not a Cloudflare one. If it's Cloudflare's, the hourly limit counts many visitors as one.
+
 ## Not yet covered
 
-- **Livewire temporary uploads to S3, and the WAF letting Intuit's webhook POSTs through.** These are the plan's other Cloud spike items, and they're checked in M2 and M5, when those features exist.
+- **The WAF letting Intuit's webhook POSTs through.** It's the plan's other Cloud spike item, checked in M5, when webhooks exist.

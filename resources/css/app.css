@@ -51,6 +51,10 @@
         scroll-padding-top: 6rem;
     }
 
+    [x-cloak] {
+        display: none !important;
+    }
+
     :focus-visible {
         @apply outline-3 outline-offset-2 outline-signal-500;
     }

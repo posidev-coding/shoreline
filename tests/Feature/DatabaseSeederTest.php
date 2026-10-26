@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\Lead;
 use App\Models\Showcase;
 use Illuminate\Support\Facades\Storage;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
@@ -14,6 +15,7 @@ it('seeds local demo photos that the admin’s upload fields can find', function
     // The admin matches stored photos to their upload fields by UUID, which the media
     // library assigns in a model event. Seeding without model events leaves it empty.
     expect(Showcase::query()->count())->toBe(3)
-        ->and(Media::query()->count())->toBe(6)
+        ->and(Lead::query()->count())->toBe(3)
+        ->and(Media::query()->count())->toBe(8)
         ->and(Media::query()->whereNull('uuid')->count())->toBe(0);
 });

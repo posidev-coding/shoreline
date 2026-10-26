@@ -20,6 +20,6 @@ it('takes the hurricane check through to a result', function () {
         ->click(answer('condition', 'some'))
         ->press('See my result')
         ->assertSee('Have someone look at it before the next storm.')
-        ->assertSee('Email us')
+        ->assertSee('Your hurricane-ready answers come with this request')
         ->assertNoJavaScriptErrors();
 });

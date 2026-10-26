@@ -12,6 +12,7 @@ final class Seo
     /**
      * @param  list<array{name: string, url: string}>  $breadcrumbs  Excluding Home, which is always first.
      * @param  list<Type>  $schemas  Extra JSON-LD for this page; the business itself is added on every page.
+     * @param  bool  $noindex  For pages with nothing to find, like the quote form's thank-you page.
      */
     public function __construct(
         public string $title,
@@ -22,6 +23,7 @@ final class Seo
         public array $breadcrumbs = [],
         public array $schemas = [],
         public bool $isHome = false,
+        public bool $noindex = false,
     ) {}
 
     public function fullTitle(string $businessName): string

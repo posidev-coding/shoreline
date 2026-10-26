@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
+use PragmaRX\Google2FA\Google2FA;
 
 /**
  * @extends Factory<User>
@@ -38,6 +39,16 @@ class UserFactory extends Factory
     {
         return $this->state(fn (array $attributes) => [
             'role' => UserRole::SuperAdmin,
+        ]);
+    }
+
+    /**
+     * Has app-based MFA set up, which /admin requires before anything else.
+     */
+    public function withMfa(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'app_authentication_secret' => (new Google2FA)->generateSecretKey(),
         ]);
     }
 

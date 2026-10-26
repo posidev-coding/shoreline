@@ -1,6 +1,6 @@
 # Laravel Cloud environments
 
-How to set up the Laravel Cloud **staging** environment for M0. Production (M8) follows the same steps, plus the domain. Everything here happens in the Laravel Cloud dashboard. It's outward-facing, so Taylor does it, or approves it. Cloud docs: https://laravel.com/cloud/docs/llms.txt
+How to set up the Laravel Cloud **staging** environment. Production (M8) follows the same steps, plus the domain. Everything here happens in the Laravel Cloud dashboard. It's outward-facing, so Taylor does it, or approves it. Cloud docs: https://laravel.com/cloud/docs/llms.txt
 
 ## 1. Application and environment
 
@@ -87,7 +87,38 @@ The INFO rows answer PLAN.md's Cloud spike: whether imagick reads HEIC, whether 
 
 Staging confirmed in M0 that Cloud passes the public bucket's URL through to `public_media`, so don't set `AWS_URL`, despite what Cloud's object storage docs say. That advice applies to apps that read the generic `AWS_*` variables.
 
+## 6. After the first M1 deploy
+
+Run these once per environment, in the **Commands** tab.
+
+1. Seed the starting site copy (services, towns, FAQs, and the about, hurricane, privacy, and terms pages):
+
+   ```sh
+   php artisan db:seed --class=ContentSeeder --force
+   ```
+
+   It only adds what’s missing and never overwrites an edit, but it would bring back a service or town the owner deleted, so it isn’t a deploy command. It seeds no reviews or jobs: those must be real.
+
+2. Create the first admin:
+
+   ```sh
+   php artisan app:create-admin you@example.com --name="Your Name"
+   ```
+
+   Add `--owner` for the owner's account; without it the account is a super admin. The command emails a link to choose a password (it expires in 60 minutes, and the queue sends it). The first sign-in then requires setting up an authenticator app.
+
+3. Fill in **Settings → Business details** in `/admin`. The dashboard's launch checklist lists what's still a placeholder, including the legal pages marked DRAFT.
+
+4. Check that the edge caches content pages. Run this twice, a few seconds apart:
+
+   ```sh
+   curl -sI -u user:password https://<staging-host>/services | grep -iE 'cache-control|cf-cache-status|set-cookie'
+   ```
+
+   Expect `cache-control: public, s-maxage=600, stale-while-revalidate=86400`, no `set-cookie`, and `cf-cache-status: HIT` the second time. Nothing local can prove the HIT: if it says `DYNAMIC` or `BYPASS`, staging's basic auth or a Cloud setting is the cause, and it needs working out before production.
+
+Once caching works, an edit in `/admin` can take up to 10 minutes to show on the site.
+
 ## Not yet covered
 
-- **An admin login on staging.** No user is seeded there. M1 adds a command that creates the super admin, together with Filament's MFA.
 - **Livewire temporary uploads to S3, and the WAF letting Intuit's webhook POSTs through.** These are the plan's other Cloud spike items, and they're checked in M2 and M5, when those features exist.

@@ -1,0 +1,10 @@
+{
+    "name": "Shoreline Doors",
+    "short_name": "Shoreline",
+    "icons": [
+        { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+    ],
+    "theme_color": "#0B1F33",
+    "background_color": "#F7F4EE",
+    "display": "browser"
+}

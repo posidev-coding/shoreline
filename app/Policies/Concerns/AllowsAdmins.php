@@ -6,9 +6,10 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
 
 /**
- * Website content is managed by super admins and the owner, the same people who can enter /admin.
+ * Super admins and the owner, the same people who can enter /admin, manage the website and
+ * the business records. Clients reach their own records through the portal's policies (M4).
  */
-trait AllowsAdminsToManageContent
+trait AllowsAdmins
 {
     public function viewAny(User $user): bool
     {
@@ -36,6 +37,26 @@ trait AllowsAdminsToManageContent
     }
 
     public function deleteAny(User $user): bool
+    {
+        return $user->role->canAccessAdmin();
+    }
+
+    public function restore(User $user, Model $model): bool
+    {
+        return $user->role->canAccessAdmin();
+    }
+
+    public function restoreAny(User $user): bool
+    {
+        return $user->role->canAccessAdmin();
+    }
+
+    public function forceDelete(User $user, Model $model): bool
+    {
+        return $user->role->canAccessAdmin();
+    }
+
+    public function forceDeleteAny(User $user): bool
     {
         return $user->role->canAccessAdmin();
     }

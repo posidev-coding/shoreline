@@ -3,7 +3,7 @@
 namespace App\Policies;
 
 use App\Models\User;
-use App\Policies\Concerns\AllowsAdminsToManageContent;
+use App\Policies\Concerns\AllowsAdmins;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -11,7 +11,7 @@ use Illuminate\Database\Eloquent\Model;
  */
 class PagePolicy
 {
-    use AllowsAdminsToManageContent;
+    use AllowsAdmins;
 
     public function create(User $user): bool
     {

@@ -79,8 +79,9 @@ class ManageSite extends SettingsPage
                                     ->columns(7)
                                     ->required()
                                     ->columnSpanFull(),
-                                TimePicker::make('opens')->seconds(false)->format('H:i')->required(),
-                                TimePicker::make('closes')->seconds(false)->format('H:i')->required()->after('opens'),
+                                // Wall-clock times, not moments, so they skip the admin's time zone conversion.
+                                TimePicker::make('opens')->seconds(false)->format('H:i')->timezone(config('app.timezone'))->required(),
+                                TimePicker::make('closes')->seconds(false)->format('H:i')->timezone(config('app.timezone'))->required()->after('opens'),
                             ]),
                     ]),
                 Section::make('Licensing and links')

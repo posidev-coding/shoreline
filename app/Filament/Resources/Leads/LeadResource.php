@@ -16,7 +16,7 @@ use Filament\Tables\Table;
 
 /**
  * The inbox for quote requests from the website. Requests can't be created or edited here,
- * only triaged. M3 adds converting one into a client, property, and project.
+ * only triaged, and converted into a project for a new or existing client.
  */
 class LeadResource extends Resource
 {

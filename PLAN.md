@@ -34,7 +34,7 @@ The folder `/Users/taylorcox/Dev/Projects/shoreline` is empty (greenfield, not y
 
 ## Roles and access
 - `users.role`: `super_admin | owner | client` (a string-backed enum).
-- `client_user` pivot with a role (`primary | manager | billing | viewer`). One property-management company can have several logins, and one person can belong to several accounts.
+- `client_user` pivot with a role (`primary | manager | billing | viewer`). One property-management company can have several logins, and one person can belong to several accounts. Built in M4 with the portal, decided in M3: nothing logs a client in before then.
 - Filament `canAccessPanel()` admits only super_admin and owner.
 - Super-admin-only areas: Users, QuickBooks Integration, Sync Issues, Activity Log.
 - Impersonation via `stechstudio/filament-impersonate` (→ owner, or → client with `redirectTo('/portal')` and its banner). Every impersonation is written to the activity log.
@@ -48,9 +48,9 @@ Conventions:
 - Soft deletes on clients, properties, and projects.
 
 ### Operations
-- **clients**: display_name, first/last name, company, email, phone (E.164), billing address, `is_property_manager`, `qb_mode` (`flat` | `sub_customer_per_property`), notes, plus the QB sync columns described below.
+- **clients**: display_name (unique ignoring case, trashed clients included, because QuickBooks refuses duplicate customer names), first/last name, company, email, phone (E.164), billing address, `is_property_manager`, `qb_mode` (`flat` | `sub_customer_per_property`), notes, plus the QB sync columns described below. `qb_mode` and the sync columns arrive with M5 and M6, where they mean something.
 - **properties**:
-  - client_id, label, address, county, service_area_id, lat/lng
+  - client_id, label, address, county, service_area_id. No lat/lng, decided in M3: without a geocoding API nothing would fill them.
   - type (primary / vacation rental / long-term rental / commercial)
   - encrypted access info (lockbox and gate codes), on-site or rental-manager contact
   - turnover constraints (e.g. "Saturday changeover")
@@ -78,15 +78,16 @@ Conventions:
   - service, details, urgency, contact info (normalized for dedupe), address, photos
   - attribution (utm_*, gclid, landing page), consent flags
   - status (new / contacted / converted / spam)
-  - converted client, property, and project ids
+  - converted: `projects.lead_id` points back to the request, and the project carries the client and property.
 - **projects**:
-  - client_id, property_id, service_id, title
+  - client_id, property_id, service_id, lead_id, title, description (scope of work), photos (private)
+  - client_id always follows the property, so the two can't disagree.
   - **`stage`**: `estimating → proposal_sent → approved → materials_ordered → scheduled → in_progress → completed → closed`, plus `on_hold`, `lost` (with `lost_reason`), and `cancelled`
-  - **`billing_status`**, derived from invoices and payments: `unbilled | invoiced | partial | paid | overdue | void`
+  - **`billing_status`**, derived from invoices and payments: `unbilled | invoiced | partial | paid | overdue | void`. Arrives with M6.
   - The kanban board shows `stage` only.
 - **visits**:
   - project_id, type (site measure / install / service / warranty), arrival window
-  - status (tentative / confirmed / done), client_notified
+  - status (tentative / confirmed / done). `client_notified` arrives with the M4 notification emails.
   - Visits feed the calendar and a signed ICS feed the owner can subscribe to on his phone.
 - **project_line_items**:
   - The working draft: `part_id` (optional; picking a part fills description, rate, and QB item), catalog_item_id, description, qty, rate, TAX/NON.
@@ -320,15 +321,20 @@ Conventions:
 - Owner alert and customer auto-reply.
 - Lead inbox (new, contacted, spam). Convert moved to M3, decided in M2: it creates the clients, properties, and projects that M3 builds.
 
-**M3 Operations core**
-- Clients, client_user, properties, projects (stage), line items, visits.
-- The lead inbox's "Convert to client + property + project" action, with its de-dupe on email and phone.
-- **Parts and equipment:**
+**M3 Operations core** (three PRs, each checked on staging)
+- **M3a Clients, properties, projects:**
+  - Clients, properties, projects (stage), line items, visits, tasks, timeline, project photos.
+  - The lead inbox's "Convert to client + property + project" action. It suggests the client with the same email (ignoring case) or phone, and their property at the same address; the owner picks.
+  - Activity log: each record's History page, and the full log for super admins. Property access info stays out of it.
+  - Global search across clients, properties (by address), and projects.
+  - Decided in M3a: `client_user` waits for M4. The QuickBooks columns wait for M5 and M6. No pg_trgm: Filament's search is a plain ILIKE, instant at this size. The quote request's photos stay on the lead and show on the project rather than being copied.
+- **M3b Parts and equipment:**
   - Parts catalog with suppliers, plus optional stock tracking and stock movements.
   - Line-item ordering workflow and the "Parts to order" page.
   - Installed-equipment tree per property.
   - "Record installed equipment" step when a project is completed.
-- Calendar, kanban, tasks, timeline, activity log, non-money KPIs (including low stock), ICS feed.
+- **M3c Board, schedule, dashboard:** calendar, kanban, non-money KPIs (including low stock), ICS feed.
+  - Ask the owner which calendar app he uses before building the ICS feed. Google Calendar refreshes a subscribed feed only every several hours, so a visit booked that morning may not reach his phone that day.
 
 **M4 Portal (no money yet)**
 - Code/link login, invites, dashboard, project pages, photos, documents, messages.
@@ -435,6 +441,10 @@ Conventions:
 
 **Laravel Cloud**
 - ~~Whether Cloud's imagick decodes HEIC.~~ Verified on staging in M2: `app:cloud-smoke` decoded a sample HEIC (320×240). M0 had shown only that imagick *lists* HEIC, which proves nothing: a cloud session's imagick listed it too and couldn't decode one until libheif's HEVC plugin (`libheif-plugin-libde265`) was installed. The sample is a simple single-image HEIC, while iPhones save tiled images with depth data, so a real iPhone upload through the quote form is the last check.
+- ~~Whether quote photos reach R2 and the lead from a real phone.~~ Verified on staging in M2:
+  - The first iPhone quote 500'd: Livewire's S3 driver takes one file per upload, so the form now uploads each photo separately.
+  - The next one uploaded to R2, but the queued job lost its photos: one converted to an 11.96 MB file, over the media library's 10 MB default. The limits are now one 20 MB setting, HEIC conversions are scaled to 12 MP, and one refused photo no longer takes the others down.
+  - After that fix, the photos attached and showed in `/admin`.
 - ~~Whether pg_trgm is available.~~ Verified on staging in M0: pg_trgm 1.6 is available, not yet installed. The first migration that needs it runs `create extension if not exists pg_trgm`. pg_trgm is a trusted extension, so the app's role should be allowed to create it; that migration's deploy confirms it.
 - ~~Whether outbound SMTP on port 465 works.~~ Verified on staging in M0: `smtp.mx.cloudflare.net:465` is reachable over TLS (55 ms), and a queue worker delivered a test message through Cloudflare.
 - ~~Whether Cloud's edge caches HTML.~~ Verified on staging in M1: it doesn't. `/services`, sent with `public, s-maxage=600` and no app cookies, came back `cf-cache-status: DYNAMIC`. The shared edge caches by file extension only. Staging runs a current Flex size, which wakes in under 500 ms, so the site doesn't need the HTML cache.

@@ -36,6 +36,7 @@ Several packages changed majors recently (Filament 5, Livewire 4, Pest 5, spatie
 - spatie/laravel-settings parses `@var` on settings properties and crashes on array shapes, so array properties get `@phpstan-var` only.
 - Tests run against the `shoreline_testing` Postgres database, which `phpunit.xml` forces. Don't switch tests to SQLite.
 - **Turnstile** guards the quote form only when `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are set; `.env.example` has Cloudflare's always-pass test keys and `phpunit.xml` empties them. Without keys the honeypot and hourly limit still apply.
+- **Photo size limit:** 20 MB, set by `media-library.max_file_size`. The quote form and the admin's photo fields read it, and Livewire's temporary upload rule (`config/livewire.php`) must match: a photo the form accepts but the media library refuses is lost in the queued job. A test fails if they drift.
 - **HEIC photos** need Imagick with libheif's HEVC decoder (on Ubuntu, `libheif-plugin-libde265`). Imagick lists HEIC without it but can't decode one.
 - In one test, the `Vite` singleton remembers preloaded assets between requests, so a second request renders different HTML; call `app(Vite::class)->flush()` between them.
 - The browser plugin's `click()` reads text containing CSS characters, like a comma, as a selector. Use a CSS selector for those.

@@ -15,6 +15,12 @@ use ImagickException;
  */
 class HeicConverter
 {
+    /**
+     * The longest side a converted photo keeps: an iPhone's standard 12 MP. JPEG takes about
+     * twice the bytes of HEIC, so a 48 MP HEIC at full size could pass the media library's limit.
+     */
+    public const int MAX_EDGE = 4032;
+
     /** Brands in an ISO media file's ftyp box that mark a HEIC or HEIF still image. */
     private const array BRANDS = ['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'mif1', 'msf1'];
 
@@ -34,11 +40,16 @@ class HeicConverter
     /**
      * Writes a JPEG next to the file and returns its path, or null when Imagick can't decode it.
      */
-    public function toJpeg(string $path): ?string
+    public function toJpeg(string $path, int $maxEdge = self::MAX_EDGE): ?string
     {
         try {
             $image = new Imagick($path);
             $image->setIteratorIndex(0);
+
+            if (max($image->getImageWidth(), $image->getImageHeight()) > $maxEdge) {
+                $image->resizeImage($maxEdge, $maxEdge, Imagick::FILTER_LANCZOS, 1, true);
+            }
+
             $image->setImageFormat('jpeg');
             $image->setImageCompressionQuality(85);
             // libheif has already applied the photo's rotation; don't let viewers apply it again.

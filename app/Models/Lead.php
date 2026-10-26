@@ -37,6 +37,15 @@ class Lead extends Model implements HasMedia
     public const int MAX_PHOTOS = 6;
 
     /**
+     * The largest photo the site takes: the media library's own limit, so a photo the quote
+     * form accepts is never refused when the job attaches it.
+     */
+    public static function maxPhotoKilobytes(): int
+    {
+        return intdiv((int) config('media-library.max_file_size'), 1024);
+    }
+
+    /**
      * @return BelongsTo<Service, $this>
      */
     public function service(): BelongsTo

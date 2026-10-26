@@ -145,7 +145,7 @@ Conventions:
 
 **Get a Quote**
 - A multi-step Livewire wizard: service → details (size, style, symptoms) → photos (up to 6) → address/contact → review.
-- **HEIC is converted in the browser** with `heic2any` before upload, because iOS Safari's own conversion is unreliable.
+- **HEIC is converted on the server** (decided in M2; the plan had `heic2any` in the browser, but it was last released in 2023 and is 2.7 MB). Phones upload HEIC as is, and a queued job converts it to JPEG with Imagick. If Imagick can't decode it, the original stays attached; Safari shows HEIC natively.
 - Spam protection: Turnstile (`ryangjchandler/laravel-cloudflare-turnstile`), honeypot, and throttling.
 - Each submission creates a Lead, emails the owner, raises a Filament database notification, and sends the customer an auto-reply.
 
@@ -318,10 +318,11 @@ Conventions:
 **M2 Leads**
 - Quote wizard (HEIC conversion, Turnstile, honeypot, throttle).
 - Owner alert and customer auto-reply.
-- Lead inbox with the convert action.
+- Lead inbox (new, contacted, spam). Convert moved to M3, decided in M2: it creates the clients, properties, and projects that M3 builds.
 
 **M3 Operations core**
 - Clients, client_user, properties, projects (stage), line items, visits.
+- The lead inbox's "Convert to client + property + project" action, with its de-dupe on email and phone.
 - **Parts and equipment:**
   - Parts catalog with suppliers, plus optional stock tracking and stock movements.
   - Line-item ordering workflow and the "Parts to order" page.
@@ -363,7 +364,7 @@ Conventions:
   - SEO: `spatie/laravel-sitemap:^8.2`, `spatie/schema-org`
   - Forms and login: `ryangjchandler/laravel-cloudflare-turnstile:^3.0`, `spatie/laravel-honeypot:^4.7`, `spatie/laravel-one-time-passwords:^1.1`, `propaganistas/laravel-phone:^6.1`
 - **composer --dev:** `pestphp/pest:^5.3`, `pestphp/pest-plugin-laravel:^5`, `pestphp/pest-plugin-browser:^5.1`, `larastan/larastan:^3.13`, `laravel/pint`, `laravel/boost`
-- **npm:** `tailwindcss@^4`, `@tailwindcss/vite`, `heic2any`, `@fontsource/*` (display and body fonts), dev `playwright`
+- **npm:** `tailwindcss@^4`, `@tailwindcss/vite`, `@fontsource/*` (display and body fonts), dev `playwright`
 
 ## Verification
 - **`composer test`:** Pest feature, unit, and browser tests, then Larastan and Pint. Key suites:
@@ -433,11 +434,12 @@ Conventions:
 - Whether `:` is allowed in DisplayName.
 
 **Laravel Cloud**
-- ~~Whether Cloud's imagick reads HEIC.~~ Verified on staging in M0: imagick lists HEIC, HEIF, AVIF, and WEBP as readable. In M2, also decode a real iPhone photo, since a listed format doesn't prove every HEIC variant decodes.
+- Whether Cloud's imagick decodes HEIC. M0 showed only that imagick *lists* HEIC, HEIF, AVIF, and WEBP. In M2 a cloud session's imagick listed HEIC too and still couldn't decode one: on Ubuntu, libheif's HEVC decoder is a separate package (`libheif-plugin-libde265`). `app:cloud-smoke` now decodes a sample HEIC; run it on staging, then upload a real iPhone photo through the quote form.
 - ~~Whether pg_trgm is available.~~ Verified on staging in M0: pg_trgm 1.6 is available, not yet installed. The first migration that needs it runs `create extension if not exists pg_trgm`. pg_trgm is a trusted extension, so the app's role should be allowed to create it; that migration's deploy confirms it.
 - ~~Whether outbound SMTP on port 465 works.~~ Verified on staging in M0: `smtp.mx.cloudflare.net:465` is reachable over TLS (55 ms), and a queue worker delivered a test message through Cloudflare.
 - ~~Whether Cloud's edge caches HTML.~~ Verified on staging in M1: it doesn't. `/services`, sent with `public, s-maxage=600` and no app cookies, came back `cf-cache-status: DYNAMIC`. The shared edge caches by file extension only. Staging runs a current Flex size, which wakes in under 500 ms, so the site doesn't need the HTML cache.
-- Whether Livewire's S3 temp-upload cleanup works with Cloud keys.
+- ~~Whether Livewire's S3 temp-upload cleanup works with Cloud keys.~~ Not needed: `app:prune-uploads` deletes abandoned uploads daily instead of a bucket lifecycle rule.
+- Whether `request()->ip()` is the visitor on Cloud. The quote form prefers Cloudflare's `CF-Connecting-IP` there; the admin shows each lead's IP so staging can confirm it.
 - Whether the WAF lets Intuit webhook POSTs through.
 
 **Tooling**

@@ -68,8 +68,10 @@ if ! php_ok; then
   apt_install $PHP_PKGS || log "ERROR: PHP 8.5 core install failed"
   # Optional extensions go after the core, so apt satisfies their phpapi-* dependency
   # with php8.5-cli instead of pulling in php8.5-phpdbg. Never block the session on them.
+  # libheif-plugin-libde265 is libheif's HEVC decoder: without it imagick lists HEIC
+  # but can't decode an iPhone photo.
   if php_ok; then
-    for pkg in php8.5-imagick php8.5-pcov; do
+    for pkg in php8.5-imagick php8.5-pcov libheif-plugin-libde265; do
       { apt-cache show "$pkg" >/dev/null 2>&1 && apt_install "$pkg"; } || log "WARN: $pkg unavailable"
     done
   fi

@@ -4,6 +4,7 @@ use App\Http\Controllers\Site\FaqController;
 use App\Http\Controllers\Site\HomeController;
 use App\Http\Controllers\Site\HurricaneReadyController;
 use App\Http\Controllers\Site\PageController;
+use App\Http\Controllers\Site\QuoteController;
 use App\Http\Controllers\Site\ReviewController;
 use App\Http\Controllers\Site\RobotsController;
 use App\Http\Controllers\Site\ServiceAreaController;
@@ -36,6 +37,8 @@ Route::get('/about', PageController::class)->defaults('key', 'about')->name('pag
 Route::get('/contact', [PageController::class, 'contact'])->name('contact');
 Route::get('/privacy', PageController::class)->defaults('key', 'privacy')->name('pages.privacy');
 Route::get('/terms', PageController::class)->defaults('key', 'terms')->name('pages.terms');
+
+Route::get('/get-a-quote/thanks', [QuoteController::class, 'thanks'])->name('quote.thanks');
 
 Route::get('/sitemap.xml', SitemapController::class)->name('sitemap');
 Route::get('/robots.txt', RobotsController::class)->name('robots');

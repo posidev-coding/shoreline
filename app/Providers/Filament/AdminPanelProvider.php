@@ -31,6 +31,8 @@ class AdminPanelProvider extends PanelProvider
             ->login()
             ->passwordReset()
             ->profile()
+            // New quote requests land in the bell (NewLead). Polls every 30 s while the admin is open.
+            ->databaseNotifications()
             // Everyone who can sign in here is a super admin or the owner, so app-based MFA is required.
             ->multiFactorAuthentication([
                 AppAuthentication::make()

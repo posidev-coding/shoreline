@@ -17,6 +17,9 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>{{ $title }}</title>
         <meta name="description" content="{{ $seo->description }}">
+        @if ($seo->noindex)
+            <meta name="robots" content="noindex">
+        @endif
         <link rel="canonical" href="{{ $seo->canonicalUrl() }}">
 
         <meta property="og:type" content="{{ $seo->type }}">
@@ -43,6 +46,7 @@
         @foreach ($seo->schemas as $schema)
             {!! $schema->toScript() !!}
         @endforeach
+        @stack('head')
     </head>
     <body class="flex min-h-screen flex-col bg-salt pb-16 font-sans text-navy-900 md:pb-0">
         <a href="#main" class="sr-only z-50 rounded bg-signal-500 px-4 py-2 font-semibold text-navy-900 focus:not-sr-only focus:fixed focus:top-3 focus:left-3">

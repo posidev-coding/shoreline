@@ -14,6 +14,7 @@ use Filament\Panel;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Casts\Attribute;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -51,6 +52,19 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
             'password' => 'hashed',
             'role' => UserRole::class,
         ];
+    }
+
+    /**
+     * Who hears about new quote requests: the owner, or super admins until an owner account
+     * exists, so a lead is never announced to nobody.
+     *
+     * @return Collection<int, self>
+     */
+    public static function leadRecipients(): Collection
+    {
+        $owners = self::query()->where('role', UserRole::Owner)->get();
+
+        return $owners->isNotEmpty() ? $owners : self::query()->where('role', UserRole::SuperAdmin)->get();
     }
 
     /**

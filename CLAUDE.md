@@ -18,6 +18,7 @@ Several packages changed majors recently (Filament 5, Livewire 4, Pest 5, spatie
 - `php artisan migrate:fresh --seed` seeds the site copy, a local super admin (`admin@example.com` / `password`, which must set up an authenticator app on first sign-in), and, locally only, demo jobs and reviews.
 - `php artisan app:create-admin <email> [--owner]` creates an admin on any environment and emails a link to set the password.
 - `php artisan app:cloud-smoke --mail=you@example.com` on a Laravel Cloud environment (Commands tab) checks both buckets, the queue, and mail, and reports the Cloud spike items.
+- `php artisan app:prune-uploads` deletes Livewire temporary uploads older than a day. The scheduler runs it daily, because Livewire can't clean up a bucket itself.
 
 ## Rules that aren't obvious from the code
 
@@ -30,12 +31,15 @@ Several packages changed majors recently (Filament 5, Livewire 4, Pest 5, spatie
 - **Scheduled tasks** run no more often than hourly, so the environment can scale to zero.
 - `users.role` (`super_admin | owner | client`) is not mass-assignable. Only super admins and owners get into `/admin`.
 - **Public content routes** go in `routes/content.php`, which runs the `content` middleware group: no session and no cookies, so a page view writes nothing to the database. Laravel Cloud's shared edge caches only static files, never HTML, so every page view reaches the app. Anything that needs the session, CSRF, or a flash message goes in `routes/web.php`.
-- **Site copy** never promises what isn't built yet (online quote requests, estimate approval, the client portal), and reviews and jobs are seeded only locally: published ones must be real.
+- **Site copy** never promises what isn't built yet (estimate approval, the client portal), and reviews and jobs are seeded only locally: published ones must be real.
 - **Brand contrast**: orange (`signal`) buttons take navy text, and orange text on a light background is `signal-700`.
 - spatie/laravel-settings parses `@var` on settings properties and crashes on array shapes, so array properties get `@phpstan-var` only.
 - Tests run against the `shoreline_testing` Postgres database, which `phpunit.xml` forces. Don't switch tests to SQLite.
+- **Turnstile** guards the quote form only when `TURNSTILE_SITE_KEY` and `TURNSTILE_SECRET_KEY` are set; `.env.example` has Cloudflare's always-pass test keys and `phpunit.xml` empties them. Without keys the honeypot and hourly limit still apply.
+- **HEIC photos** need Imagick with libheif's HEVC decoder (on Ubuntu, `libheif-plugin-libde265`). Imagick lists HEIC without it but can't decode one.
 - In one test, the `Vite` singleton remembers preloaded assets between requests, so a second request renders different HTML; call `app(Vite::class)->flush()` between them.
 - The browser plugin's `click()` reads text containing CSS characters, like a comma, as a selector. Use a CSS selector for those.
+- The browser plugin's in-process server doesn't parse the `files[]` array Livewire uploads with, so uploads can't be tested in tests/Browser. Test them with `Livewire::test()->set('photos', [...])`.
 
 ## Claude Code cloud sessions
 

@@ -74,7 +74,7 @@ class ShowcaseForm
             ->collection($collection)
             ->image()
             ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
-            ->maxSize(20 * 1024)
+            ->maxSize(intdiv((int) config('media-library.max_file_size'), 1024))
             ->required();
     }
 }

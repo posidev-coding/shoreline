@@ -11,6 +11,9 @@ use Illuminate\Http\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Spatie\MediaLibrary\MediaCollections\Exceptions\FileIsTooBig;
+use Spatie\MediaLibrary\MediaCollections\Exceptions\FileUnacceptableForCollection;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 
 /**
  * Moves a quote request's photos from Livewire's temporary uploads onto the lead, converting
@@ -52,6 +55,10 @@ class AttachLeadPhotos implements ShouldQueue
 
         foreach ($this->uploads as $upload) {
             if (! $storage->exists($upload['path'])) {
+                if (! $this->alreadyAttached($upload['path'])) {
+                    Log::error('A quote photo’s upload was gone before it could be attached.', ['lead' => $this->lead->getKey(), 'disk' => $this->disk, 'path' => $upload['path']]);
+                }
+
                 continue;
             }
 
@@ -63,10 +70,16 @@ class AttachLeadPhotos implements ShouldQueue
             if (in_array($extension, self::IMAGE_EXTENSIONS, true)) {
                 $name = Str::limit(pathinfo($upload['name'], PATHINFO_FILENAME), 100, '') ?: 'Photo';
 
-                $this->lead->addMedia($file)
-                    ->usingName($name)
-                    ->usingFileName((Str::slug($name) ?: 'photo').'.'.$extension)
-                    ->toMediaCollection('photos');
+                try {
+                    $this->lead->addMedia($file)
+                        ->usingName($name)
+                        ->usingFileName((Str::slug($name) ?: 'photo').'.'.$extension)
+                        ->withCustomProperties(['upload' => $upload['path']])
+                        ->toMediaCollection('photos');
+                } catch (FileIsTooBig|FileUnacceptableForCollection $exception) {
+                    // Retrying won't change the answer, and failing the job would lose the other photos too.
+                    Log::error('A quote photo was refused.', ['lead' => $this->lead->getKey(), 'name' => $upload['name'], 'error' => $exception->getMessage()]);
+                }
             } else {
                 Log::warning('Skipped a quote photo that isn’t an image.', ['lead' => $this->lead->getKey(), 'type' => $extension]);
             }
@@ -79,6 +92,14 @@ class AttachLeadPhotos implements ShouldQueue
 
             $storage->delete($upload['path']);
         }
+    }
+
+    /**
+     * A retry finds the uploads an earlier attempt attached already gone; that's expected.
+     */
+    private function alreadyAttached(string $path): bool
+    {
+        return $this->lead->getMedia('photos')->contains(fn (Media $media): bool => $media->getCustomProperty('upload') === $path);
     }
 
     private function download(Filesystem $storage, string $path): string

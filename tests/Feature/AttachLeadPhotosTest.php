@@ -3,6 +3,7 @@
 use App\Jobs\AttachLeadPhotos;
 use App\Models\Lead;
 use App\Support\HeicConverter;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -83,9 +84,58 @@ it('drops an upload that isn’t really an image, whatever its name says', funct
 });
 
 it('skips uploads an earlier attempt already attached', function () {
+    Log::spy();
+    $this->lead->addMedia(base_path('tests/Fixtures/door-with-gps.jpg'))->preservingOriginal()
+        ->usingName('first')->withCustomProperties(['upload' => 'livewire-tmp/already-attached'])->toMediaCollection('photos');
     $done = ['path' => 'livewire-tmp/already-attached', 'name' => 'first.jpg'];
 
     dispatch_sync(new AttachLeadPhotos($this->lead, 'uploads', [$done, upload('door-with-gps.jpg', 'second.jpg')]));
 
-    expect($this->lead->getMedia('photos')->pluck('name')->all())->toBe(['second']);
+    expect($this->lead->refresh()->getMedia('photos')->pluck('name')->all())->toBe(['first', 'second']);
+    Log::shouldNotHaveReceived('error');
+});
+
+it('logs an upload that was gone before anything attached it', function () {
+    Log::spy();
+
+    dispatch_sync(new AttachLeadPhotos($this->lead, 'uploads', [['path' => 'livewire-tmp/vanished', 'name' => 'door.jpg']]));
+
+    Log::shouldHaveReceived('error')->withArgs(fn (string $message, array $context) => str_contains($message, 'gone') && $context['path'] === 'livewire-tmp/vanished');
+});
+
+it('attaches the other photos when the media library refuses one', function () {
+    // On staging, a 12 MB phone photo met the media library's 10 MB default, and the job lost every photo.
+    Log::spy();
+    config(['media-library.max_file_size' => 10 * 1024]);
+    $big = UploadedFile::fake()->image('big.jpg', 3000, 3000);
+    expect($big->getSize())->toBeGreaterThan(10 * 1024);
+    Storage::disk('uploads')->put($bigPath = 'livewire-tmp/big', file_get_contents($big->getRealPath()));
+
+    dispatch_sync(new AttachLeadPhotos($this->lead, 'uploads', [
+        ['path' => $bigPath, 'name' => 'IMG_0001.JPG'],
+        upload('door-with-gps.jpg', 'IMG_0002.JPG'),
+    ]));
+
+    expect($this->lead->getMedia('photos')->pluck('name')->all())->toBe(['IMG_0002'])
+        ->and(Storage::disk('uploads')->allFiles())->toBe([]);
+    Log::shouldHaveReceived('error')->withArgs(fn (string $message, array $context) => str_contains($message, 'refused') && $context['name'] === 'IMG_0001.JPG');
+});
+
+it('scales a large converted HEIC down to a 12 MP photo', function () {
+    copy(base_path('tests/Fixtures/door.heic'), $heic = sys_get_temp_dir().'/'.Str::random(8).'.heic');
+
+    $jpeg = (new HeicConverter)->toJpeg($heic, maxEdge: 160);
+
+    expect((new Imagick((string) $jpeg))->getImageGeometry())->toBe(['width' => 160, 'height' => 120]);
+    unlink($heic);
+    unlink((string) $jpeg);
+})->skip(! canDecodeHeic(), 'Imagick here can’t decode HEVC. On Ubuntu, install libheif-plugin-libde265.');
+
+it('keeps every photo size limit in step, so a photo one accepts the next never refuses', function () {
+    $bytes = (int) config('media-library.max_file_size');
+
+    expect(Lead::maxPhotoKilobytes() * 1024)->toBe($bytes)
+        ->and(config('livewire.temporary_file_upload.rules'))->toContain('max:'.intdiv($bytes, 1024))
+        // Phones save photos near 12 MB.
+        ->and($bytes)->toBeGreaterThanOrEqual(20 * 1024 * 1024);
 });

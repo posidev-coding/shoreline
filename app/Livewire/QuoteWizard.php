@@ -237,7 +237,7 @@ class QuoteWizard extends Component
         $this->photos = $kept;
 
         if ($rejected !== []) {
-            $this->addError('photos', 'We couldn’t add '.implode(', ', $rejected).'. Send up to '.Lead::MAX_PHOTOS.' photos: JPEG, PNG, WebP, or iPhone HEIC, each up to 12 MB.');
+            $this->addError('photos', 'We couldn’t add '.implode(', ', $rejected).'. Send up to '.Lead::MAX_PHOTOS.' photos: JPEG, PNG, WebP, or iPhone HEIC, each up to '.(Lead::maxPhotoKilobytes() / 1024).' MB.');
         }
     }
 
@@ -392,7 +392,7 @@ class QuoteWizard extends Component
 
     private function photoRule(): File
     {
-        return File::types(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'])->max(12 * 1024);
+        return File::types(['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'])->max(Lead::maxPhotoKilobytes());
     }
 
     /**

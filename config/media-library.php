@@ -50,7 +50,10 @@ return [
      * The maximum file size of an item in bytes.
      * Adding a larger file will result in an exception.
      */
-    'max_file_size' => 1024 * 1024 * 10, // 10MB
+    // 20 MB: phones save photos near 12 MB. The quote form, the admin's photo fields, and Livewire's
+    // temporary upload rule (config/livewire.php) use the same limit; tests/Feature/AttachLeadPhotosTest
+    // fails if they drift apart, since a photo the form accepts but this refuses is lost.
+    'max_file_size' => 1024 * 1024 * 20,
 
     /*
      * Uploads whose file name contains any of these extensions will be rejected.

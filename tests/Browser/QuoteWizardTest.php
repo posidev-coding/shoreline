@@ -28,6 +28,8 @@ it('takes a quote request from start to finish', function () {
         ->type('#zip', '28516')
         ->press('Next')
         ->assertSee('Look it over')
+        // The honeypot turns away a form sent sooner after loading than a person could fill it in.
+        ->wait(config('honeypot.amount_of_seconds') + 0.5)
         ->press('Send my request')
         ->assertSee('Got it. Thanks!')
         ->assertNoJavaScriptErrors();

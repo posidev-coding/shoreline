@@ -360,6 +360,10 @@ Conventions:
 - Accessibility, security, and performance pass; a backup-restore drill.
 - Runbooks: QB reconnect, webhook replay, CDC backfill.
 - **Production** environment on `shorelinedoors.com`: Cloudflare DNS-only records, CNAME flattening at the apex, Web Analytics snippet added by hand.
+- **Mail authentication**, because Cloudflare Email Sending put a `p=reject` DMARC policy on the domain (see [docs/laravel-cloud.md](docs/laravel-cloud.md), step 4):
+  - Check that the owner's Google Workspace mail passes SPF and DKIM. SPF went in on October 27; Google's DKIM key (`google._domainkey`) is still to add.
+  - Check that nothing else, like a scheduling app or a phone system, sends as `@shorelinedoors.com` without passing too.
+  - Add a DMARC report address (`rua`), so a failing sender shows up before customers notice.
 - Production Intuit keys. Seed the real owner account (the super admin email comes from an env var).
 
 ## Packages

@@ -65,6 +65,13 @@ MAIL_FROM_NAME="${APP_NAME}"
 
 `MAIL_PASSWORD` is a Cloudflare API token with Email Sending permission. Store it in Cloud's **Secrets Manager**, not as a plain variable. Cloudflare only sends from a domain that's onboarded to Email Sending, so `shorelinedoors.com` has to be on Cloudflare first.
 
+> **Before onboarding a domain to Email Sending, authenticate the mail it already sends.** Onboarding adds a DMARC record on the root domain, `_dmarc` with `v=DMARC1; p=reject;`, which tells Gmail, Yahoo, and Outlook to refuse any mail from the domain that doesn't pass SPF or DKIM. The owner's mailbox is on Google Workspace, so the domain needs both of these first:
+>
+> - **SPF**, a TXT record on `@`: `v=spf1 include:_spf.google.com ~all`. Leave Cloudflare out of it: Email Sending sends from `cf-bounce.shorelinedoors.com`, which has its own SPF record.
+> - **DKIM** from Google: in admin.google.com, **Apps → Google Workspace → Gmail → Authenticate email**, generate a key, add it as a TXT record named `google._domainkey`, then select **Start authentication**.
+>
+> Afterwards, send from the mailbox to a Gmail address and check **Show original**: SPF, DKIM, and DMARC should all say PASS. Without this, the owner's own mail bounces with `550 5.7.26 Unauthenticated email from shorelinedoors.com is not accepted due to domain's DMARC policy`. That happened in October 2026: onboarding in M0 published the reject policy while the domain had neither record, and his mail to Gmail bounced for about five days until the SPF record went in.
+
 From M2, the quote form uses Cloudflare Turnstile. In the Cloudflare dashboard, add a Turnstile widget (Managed mode) whose hostnames are the environment's domains, then set:
 
 ```ini

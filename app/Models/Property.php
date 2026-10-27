@@ -70,6 +70,14 @@ class Property extends Model
     }
 
     /**
+     * @return HasMany<InstalledEquipment, $this>
+     */
+    public function equipment(): HasMany
+    {
+        return $this->hasMany(InstalledEquipment::class);
+    }
+
+    /**
      * "12 Front St, Beaufort, NC 28516"
      */
     public function address(): string
@@ -99,6 +107,11 @@ class Property extends Model
 
     protected static function booted(): void
     {
+        // Equipment isn't trashed with the property, but goes when the property is deleted for good.
+        static::forceDeleting(function (self $property): void {
+            $property->equipment()->whereNull('parent_id')->get()->each->delete();
+        });
+
         static::updated(function (self $property): void {
             if ($property->wasChanged('access_info')) {
                 activity()

@@ -61,9 +61,12 @@ Conventions:
     - manufacturer, model, part/SKU number
     - `specs` jsonb, e.g. spring wire size/inside diameter/length/wind, opener drive type/HP/compatibility
     - supplier_id, cost, price, warranty term
-    - `catalog_item_id`, the QB Item it bills as
+    - `catalog_item_id`, the QB Item it bills as. Arrives with M5's item import.
     - photo and spec-sheet media, active
   - Optional stock tracking: `track_stock`, `on_hand`, `reorder_point`, plus **part_stock_movements** (received / used on project / adjusted / returned).
+    - The movements are a ledger: `on_hand` changes only through `App\Support\Stock`, which locks the part and writes a movement with the new balance, so the count always equals the sum of its movements.
+    - Stock can go below zero, because he may use a part before anyone records receiving it.
+    - A stocked part ordered for a job goes into stock when it's received, and comes out when the job is completed. Each line item is received once and used once, enforced by a partial unique index.
   - QB inventory items need QBO Plus, so stock lives in the app and QB just bills the item.
 - **suppliers**: name, rep contact, account number, website, notes.
 - **installed_equipment** (what's installed at a property):
@@ -71,7 +74,7 @@ Conventions:
   - **`parent_id`** for nesting, e.g. springs and opener belong to a door
   - manufacturer, model, serial, specs
   - Door-only fields: size, material, design pressure (+/−) with a photo of the label, impact-rated
-  - install date, `installed_by_project_id`, `warranty_expires_at`, `last_service_at`, `maintenance_due_at`
+  - `installed_on`, `installed_by_project_id`, `warranty_expires_on`, `last_serviced_on`, `maintenance_due_on` (dates, so `_on`)
   - status (active / replaced / removed) with `replaced_by_id`
   - Drives salt-air maintenance reminders, warranty lookups ("what spring is on this door?"), and repeat work.
 - **leads**:
@@ -91,7 +94,7 @@ Conventions:
   - Visits feed the calendar and a signed ICS feed the owner can subscribe to on his phone.
 - **project_line_items**:
   - The working draft: `part_id` (optional; picking a part fills description, rate, and QB item), catalog_item_id, description, qty, rate, TAX/NON.
-  - **Ordering fields:** `needs_ordering`, supplier_id, `order_status` (to_order / ordered / received), `expected_at`. These drive the `materials_ordered` stage and a "Parts to order" view.
+  - **Ordering fields:** supplier_id, `order_status` (to_order / ordered / received, null when nothing is ordered for the line), `expected_on`, plus `ordered_at` and `received_at` stamped as the status moves. These drive the `materials_ordered` stage (an approved job moves there when one of its parts is ordered) and the "Parts to order" page. `needs_ordering` was dropped in M3b: a null `order_status` says the same thing, without a way to disagree.
   - When a project is completed:
     - Stocked parts are deducted from stock.
     - The owner is prompted to record what was installed in installed_equipment, pre-filled from the line items.
@@ -329,10 +332,11 @@ Conventions:
   - Global search across clients, properties (by address), and projects.
   - Decided in M3a: `client_user` waits for M4. The QuickBooks columns wait for M5 and M6. No pg_trgm: Filament's search is a plain ILIKE, instant at this size. The quote request's photos stay on the lead and show on the project rather than being copied.
 - **M3b Parts and equipment:**
-  - Parts catalog with suppliers, plus optional stock tracking and stock movements.
-  - Line-item ordering workflow and the "Parts to order" page.
-  - Installed-equipment tree per property.
-  - "Record installed equipment" step when a project is completed.
+  - Parts catalog with suppliers, category-specific details (a spring's wire size and wind, an opener's drive), and optional stock counts with Receive, Count, Return from a job, and Write off.
+  - Line items can pick a part, which fills in the description, rate, and supplier, and can be marked to order, ordered, or received. The "Parts to order" page groups what's outstanding by supplier, with bulk actions.
+  - Installed-equipment tree per property: each door with its springs, opener, and hardware under it.
+  - Completing a job deducts its stocked parts and opens "Record installed equipment", drafted from the line items whose parts become equipment (doors, openers, springs, keypads, remotes, sensors, smart controllers, struts and wind braces), on the new door or the one already there. Where exactly one piece of the same kind is in place, it's suggested as the one being replaced.
+  - Decided in M3b: cables, drums, rollers, tracks, hinges, weather seal, and other hardware aren't recorded as equipment, since they wear out and are replaced without a record. A part with history can't be deleted; turning off "Still sold" retires it.
 - **M3c Board, schedule, dashboard:** calendar, kanban, non-money KPIs (including low stock), ICS feed.
   - Ask the owner which calendar app he uses before building the ICS feed. Google Calendar refreshes a subscribed feed only every several hours, so a visit booked that morning may not reach his phone that day.
 

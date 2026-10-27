@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ProjectStage;
+use App\Support\Stock;
 use Brick\Money\Money;
 use Database\Factories\ProjectFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -107,6 +108,16 @@ class Project extends Model implements HasMedia
     }
 
     /**
+     * What this job installed, as recorded when it was completed.
+     *
+     * @return HasMany<InstalledEquipment, $this>
+     */
+    public function installedEquipment(): HasMany
+    {
+        return $this->hasMany(InstalledEquipment::class, 'installed_by_project_id');
+    }
+
+    /**
      * The line items' total before tax, which QuickBooks adds.
      */
     public function subtotal(): Money
@@ -162,6 +173,16 @@ class Project extends Model implements HasMedia
                 if ($project->stage !== ProjectStage::Lost) {
                     $project->lost_reason = null;
                 }
+            }
+        });
+
+        // Finishing the job uses its stocked parts. Each line is deducted once, so reopening
+        // and completing again only deducts lines added since.
+        static::saved(function (self $project): void {
+            $justCompleted = $project->wasRecentlyCreated ? $project->completed_at !== null : $project->wasChanged('completed_at');
+
+            if ($justCompleted && $project->completed_at !== null) {
+                app(Stock::class)->useOnProject($project);
             }
         });
     }

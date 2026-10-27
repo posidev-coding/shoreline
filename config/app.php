@@ -68,6 +68,12 @@ return [
     'timezone' => 'UTC',
 
     /*
+     * Where the business runs. Times are stored in UTC and shown to people in this zone:
+     * the admin (Filament's default zone) and visit windows.
+     */
+    'business_timezone' => 'America/New_York',
+
+    /*
     |--------------------------------------------------------------------------
     | Application Locale Configuration
     |--------------------------------------------------------------------------

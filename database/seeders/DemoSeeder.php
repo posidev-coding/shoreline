@@ -4,8 +4,13 @@ namespace Database\Seeders;
 
 use App\Enums\ContactMethod;
 use App\Enums\LeadStatus;
+use App\Enums\ProjectStage;
+use App\Enums\PropertyType;
 use App\Enums\ReviewSource;
 use App\Enums\Urgency;
+use App\Enums\VisitStatus;
+use App\Enums\VisitType;
+use App\Models\Client;
 use App\Models\Lead;
 use App\Models\Service;
 use App\Models\ServiceArea;
@@ -15,10 +20,10 @@ use Illuminate\Database\Seeder;
 use RuntimeException;
 
 /**
- * Sample jobs, reviews, and quote requests so the gallery, slider, review cards, and lead
- * inbox have something to show in local development. Every review and request is labeled
- * as a demo, and this refuses to run outside the local environment: published reviews
- * must be real.
+ * Sample jobs, reviews, quote requests, clients, and projects so the gallery, slider, review
+ * cards, lead inbox, and project pages have something to show in local development. Every
+ * record is labeled as a demo, and this refuses to run outside the local environment:
+ * published reviews must be real.
  */
 class DemoSeeder extends Seeder
 {
@@ -56,6 +61,10 @@ class DemoSeeder extends Seeder
 
         if (Lead::query()->doesntExist()) {
             $this->leads();
+        }
+
+        if (Client::query()->doesntExist()) {
+            $this->clients();
         }
 
         if (Testimonial::query()->doesntExist()) {
@@ -115,6 +124,68 @@ class DemoSeeder extends Seeder
                 $lead->addMedia($this->door(rusted: true))->usingName('IMG_0412')->toMediaCollection('photos');
                 $lead->addMedia($this->door(rusted: false))->usingName('IMG_0413')->toMediaCollection('photos');
             }
+        }
+    }
+
+    /**
+     * A homeowner with a job on the calendar, and a rental company with two beach houses,
+     * so the client, property, and project pages have something to show.
+     */
+    private function clients(): void
+    {
+        $beaufort = ServiceArea::query()->where('slug', 'beaufort')->firstOrFail();
+        $emeraldIsle = ServiceArea::query()->where('slug', 'emerald-isle')->firstOrFail();
+
+        $homeowner = Client::query()->create([
+            'display_name' => 'Demo Homeowner',
+            'first_name' => 'Demo',
+            'last_name' => 'Homeowner',
+            'email' => 'homeowner@example.com',
+            'phone' => '+12525550190',
+            'billing_street' => '210 Demo St',
+            'billing_city' => 'Beaufort',
+            'billing_state' => 'NC',
+            'billing_zip' => '28516',
+        ]);
+        $home = $homeowner->properties()->create([
+            'street' => '210 Demo St', 'city' => 'Beaufort', 'zip' => '28516',
+            'service_area_id' => $beaufort->getKey(), 'county' => $beaufort->county,
+        ]);
+        $springJob = $home->projects()->create([
+            'title' => 'Replace broken torsion spring',
+            'service_id' => Service::query()->where('slug', 'springs-and-cables')->value('id'),
+            'stage' => ProjectStage::Scheduled,
+            'description' => 'Demo project: one broken spring on a 16 x 7 door. Replace both and new cables.',
+        ]);
+        foreach ([['Torsion spring, 0.243 x 2 x 32, left', '1', '89.0000'], ['Torsion spring, 0.243 x 2 x 32, right', '1', '89.0000'], ['Lift cables, pair', '1', '24.5000'], ['Labor', '1.5', '95.0000']] as $index => [$description, $quantity, $rate]) {
+            $springJob->lineItems()->create(['description' => $description, 'quantity' => $quantity, 'unit_price' => $rate, 'sort_order' => $index, 'is_taxable' => $description !== 'Labor']);
+        }
+        $tomorrow = now(config('app.business_timezone'))->addDay()->setTime(9, 0);
+        $springJob->visits()->create(['type' => VisitType::Service, 'status' => VisitStatus::Confirmed, 'starts_at' => $tomorrow->clone()->utc(), 'ends_at' => $tomorrow->clone()->addHours(2)->utc()]);
+        $springJob->tasks()->create(['title' => 'Bring winding bars', 'sort_order' => 0]);
+        $springJob->tasks()->create(['title' => 'Lube rollers and hinges', 'sort_order' => 1]);
+
+        $rentals = Client::query()->create([
+            'display_name' => 'Demo Beach Rentals',
+            'company' => 'Demo Beach Rentals',
+            'email' => 'rentals@example.com',
+            'phone' => '+12525550191',
+            'is_property_manager' => true,
+        ]);
+        foreach (['8 Demo Ocean Dr', '14 Demo Ocean Dr'] as $index => $street) {
+            $rental = $rentals->properties()->create([
+                'label' => 'Demo rental '.($index + 1),
+                'street' => $street, 'city' => 'Emerald Isle', 'zip' => '28594',
+                'service_area_id' => $emeraldIsle->getKey(), 'county' => $emeraldIsle->county,
+                'type' => PropertyType::VacationRental,
+                'access_info' => 'Demo lockbox 0000',
+                'turnover_notes' => 'Saturday changeover, 10 AM to 4 PM',
+            ]);
+            $rental->projects()->create([
+                'title' => $index === 0 ? 'Wind-rated door quote' : 'Opener install',
+                'service_id' => Service::query()->where('slug', $index === 0 ? 'hurricane-wind-rated-doors' : 'openers-and-smart-controls')->value('id'),
+                'stage' => $index === 0 ? ProjectStage::ProposalSent : ProjectStage::Completed,
+            ]);
         }
     }
 

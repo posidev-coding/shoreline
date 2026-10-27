@@ -6,12 +6,13 @@ use Filament\Support\Contracts\HasColor;
 use Filament\Support\Contracts\HasLabel;
 
 /**
- * Where a quote request stands. M3 adds Converted, when a lead becomes a client and project.
+ * Where a quote request stands. Converted means it became a project, for a new or existing client.
  */
 enum LeadStatus: string implements HasColor, HasLabel
 {
     case New = 'new';
     case Contacted = 'contacted';
+    case Converted = 'converted';
     case Spam = 'spam';
 
     public function getLabel(): string
@@ -19,6 +20,7 @@ enum LeadStatus: string implements HasColor, HasLabel
         return match ($this) {
             self::New => 'New',
             self::Contacted => 'Contacted',
+            self::Converted => 'Converted',
             self::Spam => 'Spam',
         };
     }
@@ -27,7 +29,8 @@ enum LeadStatus: string implements HasColor, HasLabel
     {
         return match ($this) {
             self::New => 'primary',
-            self::Contacted => 'success',
+            self::Contacted => 'info',
+            self::Converted => 'success',
             self::Spam => 'gray',
         };
     }

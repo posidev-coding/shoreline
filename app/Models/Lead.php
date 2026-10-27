@@ -13,6 +13,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Str;
 use Spatie\Image\Enums\Fit;
 use Spatie\MediaLibrary\HasMedia;
@@ -59,6 +60,16 @@ class Lead extends Model implements HasMedia
     public function serviceArea(): BelongsTo
     {
         return $this->belongsTo(ServiceArea::class);
+    }
+
+    /**
+     * The project it became, once converted.
+     *
+     * @return HasOne<Project, $this>
+     */
+    public function project(): HasOne
+    {
+        return $this->hasOne(Project::class);
     }
 
     public function registerMediaCollections(): void

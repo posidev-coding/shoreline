@@ -2,9 +2,9 @@
 
 namespace App\Policies;
 
-use App\Policies\Concerns\AllowsAdminsToManageContent;
+use App\Policies\Concerns\AllowsAdmins;
 
 class TestimonialPolicy
 {
-    use AllowsAdminsToManageContent;
+    use AllowsAdmins;
 }

@@ -184,6 +184,14 @@ class DemoSeeder extends Seeder
         $springJob->tasks()->create(['title' => 'Bring winding bars', 'sort_order' => 0]);
         $springJob->tasks()->create(['title' => 'Lube rollers and hinges', 'sort_order' => 1]);
 
+        // Something on today's schedule, for the dashboard and the calendar.
+        $today = now(config('app.business_timezone'))->setTime(15, 0);
+        $home->projects()->create([
+            'title' => 'Noisy opener',
+            'service_id' => Service::query()->where('slug', 'openers-and-smart-controls')->value('id'),
+            'description' => 'Demo project: the opener grinds on the way up.',
+        ])->visits()->create(['type' => VisitType::SiteMeasure, 'starts_at' => $today->clone()->utc(), 'ends_at' => $today->clone()->addHour()->utc()]);
+
         $rentals = Client::query()->create([
             'display_name' => 'Demo Beach Rentals',
             'company' => 'Demo Beach Rentals',
@@ -209,6 +217,12 @@ class DemoSeeder extends Seeder
             if ($index === 0) {
                 // Ordered for the job, so it shows on Parts to order.
                 $job->lineItems()->create(['part_id' => $parts['door']->getKey(), 'description' => $parts['door']->name, 'quantity' => '1', 'unit_price' => '2290', 'order_status' => OrderStatus::ToOrder, 'supplier_id' => $parts['door']->supplier_id]);
+
+                // Measured last week; the install waits on a changeover day and the door.
+                $measured = now(config('app.business_timezone'))->subWeek()->setTime(10, 0);
+                $install = now(config('app.business_timezone'))->next('Saturday')->setTime(10, 0);
+                $job->visits()->create(['type' => VisitType::SiteMeasure, 'status' => VisitStatus::Done, 'starts_at' => $measured->clone()->utc(), 'ends_at' => $measured->clone()->addHour()->utc()]);
+                $job->visits()->create(['type' => VisitType::Install, 'starts_at' => $install->clone()->utc(), 'ends_at' => $install->clone()->addHours(4)->utc(), 'notes' => 'Changeover day: done by 4 PM.']);
             }
         }
     }

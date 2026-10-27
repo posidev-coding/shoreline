@@ -67,6 +67,15 @@ final class EquipmentRecorder
     }
 
     /**
+     * Whether to offer recording right after the job is completed: it installed something that
+     * becomes equipment, and nothing's been recorded for it yet.
+     */
+    public static function hasSomethingToRecord(Project $project): bool
+    {
+        return self::draft($project) !== [] && ! $project->installedEquipment()->exists();
+    }
+
+    /**
      * Which door the rest goes on: the new one when the job installed a door, the property's
      * only door when it has just one, or none.
      *

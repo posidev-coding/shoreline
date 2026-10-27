@@ -14,6 +14,7 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
         then: function (): void {
             Route::middleware('content')->group(base_path('routes/content.php'));
+            Route::group([], base_path('routes/feeds.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {

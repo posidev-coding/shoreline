@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Enums\ProjectStage;
+use App\Enums\VisitStatus;
 use App\Support\Stock;
 use Brick\Money\Money;
 use Database\Factories\ProjectFactory;
@@ -13,6 +14,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
@@ -28,9 +30,14 @@ use Spatie\MediaLibrary\MediaCollections\Models\Media;
  * @property-read Client $client
  * @property-read Property $property
  */
-#[Fillable(['property_id', 'service_id', 'lead_id', 'title', 'stage', 'lost_reason', 'description'])]
+#[Fillable(['property_id', 'service_id', 'lead_id', 'title', 'stage', 'board_position', 'lost_reason', 'description'])]
 class Project extends Model implements HasMedia
 {
+    /**
+     * Room between neighboring cards on the board, the same as Flowforge leaves.
+     */
+    public const string BOARD_GAP = '65535';
+
     /** @use HasFactory<ProjectFactory> */
     use HasFactory, InteractsWithMedia, LogsActivity, SoftDeletes;
 
@@ -92,6 +99,19 @@ class Project extends Model implements HasMedia
     }
 
     /**
+     * The next visit that isn't over or done yet.
+     *
+     * @return HasOne<Visit, $this>
+     */
+    public function nextVisit(): HasOne
+    {
+        return $this->hasOne(Visit::class)->ofMany(
+            ['starts_at' => 'min', 'id' => 'min'],
+            fn (Builder $query) => $query->where('ends_at', '>=', now())->where('status', '!=', VisitStatus::Done),
+        );
+    }
+
+    /**
      * @return HasMany<ProjectTask, $this>
      */
     public function tasks(): HasMany
@@ -144,7 +164,8 @@ class Project extends Model implements HasMedia
 
     public function getActivitylogOptions(): LogOptions
     {
-        return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
+        // Dragging a card within its column isn't worth a history entry; a stage change is.
+        return LogOptions::defaults()->logFillable()->logExcept(['board_position'])->logOnlyDirty()->dontLogEmptyChanges();
     }
 
     /**
@@ -163,8 +184,16 @@ class Project extends Model implements HasMedia
                 $project->client_id = Property::withTrashed()->whereKey($project->property_id)->valueOrFail('client_id');
             }
 
-            if ($project->isDirty('stage')) {
+            // A new job's default stage isn't dirty: Laravel counts default attributes as original.
+            if ($project->isDirty('stage') || ! $project->exists) {
                 $project->stage_changed_at = now();
+
+                // The board sets both when a card is dropped; anywhere else, the job joins the end of its new column.
+                if (! $project->isDirty('board_position')) {
+                    $last = self::query()->where('stage', $project->stage)->whereKeyNot($project->getKey())->max('board_position');
+                    $project->board_position = is_numeric($last) ? bcadd((string) $last, self::BOARD_GAP, 10) : self::BOARD_GAP;
+                }
+
                 $project->completed_at = match ($project->stage) {
                     ProjectStage::Completed, ProjectStage::Closed => $project->completed_at ?? now(),
                     default => null,
@@ -191,6 +220,7 @@ class Project extends Model implements HasMedia
     {
         return [
             'stage' => ProjectStage::class,
+            'board_position' => 'decimal:10',
             'stage_changed_at' => 'datetime',
             'completed_at' => 'datetime',
         ];

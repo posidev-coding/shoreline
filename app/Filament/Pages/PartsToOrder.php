@@ -47,7 +47,7 @@ class PartsToOrder extends Page implements HasTable
 
     public static function getNavigationBadge(): ?string
     {
-        $count = ProjectLineItem::query()->where('order_status', OrderStatus::ToOrder)->count();
+        $count = ProjectLineItem::query()->withoutTrashedProjects()->where('order_status', OrderStatus::ToOrder)->count();
 
         return $count > 0 ? (string) $count : null;
     }
@@ -67,7 +67,7 @@ class PartsToOrder extends Page implements HasTable
         return $table
             ->query(ProjectLineItem::query()
                 ->whereIn('order_status', [OrderStatus::ToOrder, OrderStatus::Ordered])
-                ->whereHas('project')
+                ->withoutTrashedProjects()
                 ->with(['project.client', 'supplier', 'part']))
             ->defaultGroup(Group::make('supplier.name')
                 ->label('Supplier')

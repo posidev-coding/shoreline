@@ -3,9 +3,8 @@
 namespace App\Filament\Resources\Projects\Pages;
 
 use App\Enums\EquipmentType;
-use App\Enums\ProjectStage;
+use App\Filament\Resources\Projects\Actions\ChangeStageAction;
 use App\Filament\Resources\Projects\ProjectResource;
-use App\Filament\Resources\Projects\Schemas\ProjectForm;
 use App\Filament\Resources\Properties\PropertyResource;
 use App\Models\InstalledEquipment;
 use App\Models\Project;
@@ -21,7 +20,6 @@ use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Radio;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Notifications\Notification;
 use Filament\Resources\Pages\ViewRecord;
@@ -45,32 +43,7 @@ class ViewProject extends ViewRecord
     {
         return [
             $this->recordEquipmentAction(),
-            Action::make('changeStage')
-                ->label('Change stage')
-                ->icon(Heroicon::OutlinedArrowRightCircle)
-                ->fillForm(fn (Project $record): array => ['stage' => $record->stage, 'lost_reason' => $record->lost_reason])
-                ->schema([
-                    Select::make('stage')
-                        ->options(ProjectStage::class)
-                        ->required()
-                        ->live(),
-                    Textarea::make('lost_reason')
-                        ->label('Why it was lost')
-                        ->rows(2)
-                        ->visible(fn (Get $get): bool => ProjectForm::stage($get) === ProjectStage::Lost)
-                        ->required(fn (Get $get): bool => ProjectForm::stage($get) === ProjectStage::Lost),
-                ])
-                ->modalWidth('md')
-                ->action(function (Project $record, array $data): void {
-                    $wasDone = $record->completed_at !== null;
-                    $record->update($data);
-                    $justCompleted = ! $wasDone && $record->fresh()?->completed_at !== null;
-
-                    // Finishing a job is when to record what it installed, while it's fresh.
-                    if ($justCompleted && EquipmentRecorder::draft($record) !== [] && ! $record->installedEquipment()->exists()) {
-                        $this->replaceMountedAction('recordEquipment');
-                    }
-                }),
+            ChangeStageAction::make(fn () => $this->replaceMountedAction('recordEquipment')),
             EditAction::make(),
             ActionGroup::make([
                 ProjectHistory::action(),

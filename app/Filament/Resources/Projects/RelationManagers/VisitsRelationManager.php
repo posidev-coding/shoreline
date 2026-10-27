@@ -3,15 +3,12 @@
 namespace App\Filament\Resources\Projects\RelationManagers;
 
 use App\Enums\VisitStatus;
-use App\Enums\VisitType;
+use App\Filament\Resources\Projects\Schemas\VisitForm;
 use App\Models\Visit;
 use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
-use Filament\Forms\Components\DateTimePicker;
-use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Resources\RelationManagers\RelationManager;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
@@ -29,32 +26,7 @@ class VisitsRelationManager extends RelationManager
     {
         return $schema
             ->columns(2)
-            ->components([
-                Select::make('type')
-                    ->options(VisitType::class)
-                    ->required(),
-                Select::make('status')
-                    ->options(VisitStatus::class)
-                    ->default(VisitStatus::Tentative)
-                    ->helperText('Confirmed once the client has agreed to the time.')
-                    ->required(),
-                DateTimePicker::make('starts_at')
-                    ->label('Arrive between')
-                    ->seconds(false)
-                    ->minutesStep(15)
-                    ->required()
-                    ->live(onBlur: true),
-                DateTimePicker::make('ends_at')
-                    ->label('and')
-                    ->seconds(false)
-                    ->minutesStep(15)
-                    ->required()
-                    ->after('starts_at')
-                    ->validationMessages(['after' => 'The window has to end after it starts.']),
-                Textarea::make('notes')
-                    ->rows(2)
-                    ->columnSpanFull(),
-            ]);
+            ->components(VisitForm::components());
     }
 
     public function table(Table $table): Table
@@ -82,12 +54,12 @@ class VisitsRelationManager extends RelationManager
             ])
             ->recordActions([
                 Action::make('confirm')
-                    ->label('Confirmed')
+                    ->label('Mark confirmed')
                     ->icon(Heroicon::OutlinedCheck)
                     ->visible(fn (Visit $record): bool => $record->status === VisitStatus::Tentative)
                     ->action(fn (Visit $record) => $record->update(['status' => VisitStatus::Confirmed])),
                 Action::make('done')
-                    ->label('Done')
+                    ->label('Mark done')
                     ->icon(Heroicon::OutlinedCheckBadge)
                     ->color('success')
                     ->visible(fn (Visit $record): bool => $record->status !== VisitStatus::Done && $record->starts_at->isPast())

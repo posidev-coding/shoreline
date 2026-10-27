@@ -3,7 +3,11 @@
 namespace Database\Seeders;
 
 use App\Enums\ContactMethod;
+use App\Enums\EquipmentType;
 use App\Enums\LeadStatus;
+use App\Enums\OrderStatus;
+use App\Enums\PartCategory;
+use App\Enums\PartUnit;
 use App\Enums\ProjectStage;
 use App\Enums\PropertyType;
 use App\Enums\ReviewSource;
@@ -12,10 +16,13 @@ use App\Enums\VisitStatus;
 use App\Enums\VisitType;
 use App\Models\Client;
 use App\Models\Lead;
+use App\Models\Part;
 use App\Models\Service;
 use App\Models\ServiceArea;
 use App\Models\Showcase;
+use App\Models\Supplier;
 use App\Models\Testimonial;
+use App\Support\Stock;
 use Illuminate\Database\Seeder;
 use RuntimeException;
 
@@ -157,9 +164,21 @@ class DemoSeeder extends Seeder
             'stage' => ProjectStage::Scheduled,
             'description' => 'Demo project: one broken spring on a 16 x 7 door. Replace both and new cables.',
         ]);
-        foreach ([['Torsion spring, 0.243 x 2 x 32, left', '1', '89.0000'], ['Torsion spring, 0.243 x 2 x 32, right', '1', '89.0000'], ['Lift cables, pair', '1', '24.5000'], ['Labor', '1.5', '95.0000']] as $index => [$description, $quantity, $rate]) {
-            $springJob->lineItems()->create(['description' => $description, 'quantity' => $quantity, 'unit_price' => $rate, 'sort_order' => $index, 'is_taxable' => $description !== 'Labor']);
+        $parts = $this->parts();
+        $lines = [
+            [$parts['left'], 'Torsion spring 0.243 x 2 x 32, left wind', '1', '89.0000'],
+            [$parts['right'], 'Torsion spring 0.243 x 2 x 32, right wind', '1', '89.0000'],
+            [$parts['cables'], 'Lift cables, pair', '1', '24.5000'],
+            [null, 'Labor', '1.5', '95.0000'],
+        ];
+        foreach ($lines as $index => [$part, $description, $quantity, $rate]) {
+            $springJob->lineItems()->create(['part_id' => $part?->getKey(), 'description' => $description, 'quantity' => $quantity, 'unit_price' => $rate, 'sort_order' => $index, 'is_taxable' => $part !== null]);
         }
+
+        // What's already on the house: the door and opener he'll find when he gets there.
+        $door = $home->equipment()->create(['type' => EquipmentType::Door, 'manufacturer' => 'Clopay', 'model' => '4050', 'size' => '16x7', 'material' => 'Steel', 'installed_on' => now()->subYears(9)->toDateString()]);
+        $home->equipment()->create(['type' => EquipmentType::Opener, 'parent_id' => $door->getKey(), 'manufacturer' => 'LiftMaster', 'model' => '8500', 'installed_on' => now()->subYears(6)->toDateString(), 'maintenance_due_on' => now()->addMonths(2)->toDateString()]);
+        $home->equipment()->create(['type' => EquipmentType::SpringSet, 'parent_id' => $door->getKey(), 'notes' => 'Demo: the left spring broke.', 'installed_on' => now()->subYears(9)->toDateString()]);
         $tomorrow = now(config('app.business_timezone'))->addDay()->setTime(9, 0);
         $springJob->visits()->create(['type' => VisitType::Service, 'status' => VisitStatus::Confirmed, 'starts_at' => $tomorrow->clone()->utc(), 'ends_at' => $tomorrow->clone()->addHours(2)->utc()]);
         $springJob->tasks()->create(['title' => 'Bring winding bars', 'sort_order' => 0]);
@@ -181,12 +200,49 @@ class DemoSeeder extends Seeder
                 'access_info' => 'Demo lockbox 0000',
                 'turnover_notes' => 'Saturday changeover, 10 AM to 4 PM',
             ]);
-            $rental->projects()->create([
-                'title' => $index === 0 ? 'Wind-rated door quote' : 'Opener install',
+            $job = $rental->projects()->create([
+                'title' => $index === 0 ? 'Wind-rated door install' : 'Opener install',
                 'service_id' => Service::query()->where('slug', $index === 0 ? 'hurricane-wind-rated-doors' : 'openers-and-smart-controls')->value('id'),
-                'stage' => $index === 0 ? ProjectStage::ProposalSent : ProjectStage::Completed,
+                'stage' => $index === 0 ? ProjectStage::Approved : ProjectStage::Completed,
             ]);
+
+            if ($index === 0) {
+                // Ordered for the job, so it shows on Parts to order.
+                $job->lineItems()->create(['part_id' => $parts['door']->getKey(), 'description' => $parts['door']->name, 'quantity' => '1', 'unit_price' => '2290', 'order_status' => OrderStatus::ToOrder, 'supplier_id' => $parts['door']->supplier_id]);
+            }
         }
+    }
+
+    /**
+     * Two suppliers and the parts the demo jobs use, with springs counted on the truck.
+     *
+     * @return array<string, Part>
+     */
+    private function parts(): array
+    {
+        $coastal = Supplier::query()->create(['name' => 'Demo Coastal Door Supply', 'rep_name' => 'Demo Rep', 'account_number' => 'DEMO-1001']);
+        $openers = Supplier::query()->create(['name' => 'Demo Opener Distributors']);
+
+        $spring = fn (string $wind): array => [
+            'category' => PartCategory::TorsionSpring, 'name' => "Torsion spring 0.243 x 2 x 32, {$wind} wind", 'supplier_id' => $coastal->getKey(),
+            'specs' => ['wire_size' => '0.243', 'inside_diameter' => '2', 'length' => '32', 'wind' => $wind],
+            'cost' => '38', 'price' => '89', 'warranty_months' => 36, 'track_stock' => true, 'reorder_point' => '2',
+        ];
+
+        $parts = [
+            'left' => Part::query()->create($spring('left')),
+            'right' => Part::query()->create($spring('right')),
+            'cables' => Part::query()->create(['category' => PartCategory::Cable, 'name' => 'Lift cables, pair', 'supplier_id' => $coastal->getKey(), 'unit' => PartUnit::Pair, 'cost' => '9', 'price' => '24.50', 'track_stock' => true, 'reorder_point' => '3']),
+            'opener' => Part::query()->create(['category' => PartCategory::Opener, 'name' => 'LiftMaster 87504 wall-mount opener', 'manufacturer' => 'LiftMaster', 'model' => '87504-267', 'supplier_id' => $openers->getKey(), 'specs' => ['drive' => 'jackshaft', 'horsepower' => '1/2', 'works_with' => 'myQ'], 'cost' => '520', 'price' => '849', 'warranty_months' => 60]),
+            'door' => Part::query()->create(['category' => PartCategory::Door, 'name' => 'Clopay Classic 4050, 16 x 7, wind rated', 'manufacturer' => 'Clopay', 'model' => '4050', 'supplier_id' => $coastal->getKey(), 'specs' => ['material' => 'Steel', 'wind_rating' => '130 mph'], 'cost' => '1400', 'price' => '2290', 'warranty_months' => 120]),
+        ];
+
+        $stock = app(Stock::class);
+        $stock->adjustTo($parts['left'], '3', 'Demo starting count');
+        $stock->adjustTo($parts['right'], '1', 'Demo starting count');
+        $stock->adjustTo($parts['cables'], '6', 'Demo starting count');
+
+        return $parts;
     }
 
     /**

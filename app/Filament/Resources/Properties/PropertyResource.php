@@ -7,6 +7,7 @@ use App\Filament\Resources\Properties\Pages\EditProperty;
 use App\Filament\Resources\Properties\Pages\ListProperties;
 use App\Filament\Resources\Properties\Pages\PropertyHistory;
 use App\Filament\Resources\Properties\Pages\ViewProperty;
+use App\Filament\Resources\Properties\RelationManagers\EquipmentRelationManager;
 use App\Filament\Resources\Properties\RelationManagers\ProjectsRelationManager;
 use App\Filament\Resources\Properties\Schemas\PropertyForm;
 use App\Filament\Resources\Properties\Schemas\PropertyInfolist;
@@ -53,6 +54,7 @@ class PropertyResource extends Resource
     {
         return [
             ProjectsRelationManager::class,
+            EquipmentRelationManager::class,
         ];
     }
 

@@ -2,18 +2,27 @@
 
 namespace App\Filament\Resources\Projects\RelationManagers;
 
+use App\Enums\OrderStatus;
+use App\Models\Part;
 use App\Models\Project;
 use App\Models\ProjectLineItem;
 use App\Support\Usd;
 use Brick\Math\BigDecimal;
+use Filament\Actions\Action;
 use Filament\Actions\CreateAction;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
+use Filament\Forms\Components\DatePicker;
+use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\Toggle;
 use Filament\Resources\RelationManagers\RelationManager;
+use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Utilities\Get;
+use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Schema;
+use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
@@ -28,11 +37,22 @@ class LineItemsRelationManager extends RelationManager
 
     protected static ?string $title = 'Line items';
 
+    protected static ?string $modelLabel = 'line item';
+
     public function form(Schema $schema): Schema
     {
         return $schema
             ->columns(3)
             ->components([
+                Select::make('part_id')
+                    ->label('Part')
+                    ->helperText('Optional. Picking one fills in the description, rate, and supplier.')
+                    ->relationship('part', 'name', fn ($query) => $query->active()->orderBy('name'))
+                    ->searchable(['name', 'manufacturer', 'model', 'sku'])
+                    ->preload()
+                    ->live()
+                    ->afterStateUpdated(fn (Set $set, ?string $state) => self::fillFromPart($set, $state))
+                    ->columnSpanFull(),
                 Textarea::make('description')
                     ->required()
                     ->rows(2)
@@ -54,7 +74,45 @@ class LineItemsRelationManager extends RelationManager
                     ->helperText('Parts usually are. QuickBooks works out the tax.')
                     ->default(true)
                     ->inline(false),
+                Section::make('Ordering')
+                    ->description('For parts bought for this job. Stocked parts come off the shelf when the job is completed.')
+                    ->columns(3)
+                    ->collapsible()
+                    ->collapsed(fn (?ProjectLineItem $record): bool => $record?->order_status === null)
+                    ->columnSpanFull()
+                    ->schema([
+                        Select::make('order_status')
+                            ->label('Order')
+                            ->options(OrderStatus::class)
+                            ->placeholder('Nothing to order')
+                            ->live(),
+                        Select::make('supplier_id')
+                            ->label('From')
+                            ->relationship('supplier', 'name')
+                            ->preload()
+                            ->visible(fn (Get $get): bool => filled($get('order_status'))),
+                        DatePicker::make('expected_on')
+                            ->label('Expected')
+                            ->native(false)
+                            ->visible(fn (Get $get): bool => filled($get('order_status'))),
+                    ]),
             ]);
+    }
+
+    /**
+     * The part's name, price, and supplier, as a starting point the owner can change.
+     */
+    private static function fillFromPart(Set $set, ?string $partId): void
+    {
+        $part = filled($partId) ? Part::query()->find($partId) : null;
+
+        if ($part === null) {
+            return;
+        }
+
+        $set('description', $part->name);
+        $set('unit_price', $part->price);
+        $set('supplier_id', $part->supplier_id);
     }
 
     public function table(Table $table): Table
@@ -80,6 +138,15 @@ class LineItemsRelationManager extends RelationManager
                     ->label('Tax')
                     ->formatStateUsing(fn (bool $state): string => $state ? 'TAX' : 'NON')
                     ->color(fn (bool $state): string => $state ? 'gray' : 'warning'),
+                TextColumn::make('order_status')
+                    ->label('Order')
+                    ->badge()
+                    ->description(fn (ProjectLineItem $record): ?string => match ($record->order_status) {
+                        OrderStatus::Ordered => $record->expected_on ? 'Due '.$record->expected_on->format('M j') : null,
+                        OrderStatus::Received => $record->received_at?->timezone(config('app.business_timezone'))->format('M j'),
+                        default => null,
+                    })
+                    ->placeholder(''),
             ])
             ->headerActions([
                 CreateAction::make()
@@ -90,6 +157,19 @@ class LineItemsRelationManager extends RelationManager
                     ]),
             ])
             ->recordActions([
+                Action::make('markOrdered')
+                    ->label('Mark ordered')
+                    ->icon(Heroicon::OutlinedTruck)
+                    ->visible(fn (ProjectLineItem $record): bool => $record->order_status === OrderStatus::ToOrder)
+                    ->schema([DatePicker::make('expected_on')->label('Expected')->native(false)])
+                    ->modalWidth('sm')
+                    ->action(fn (ProjectLineItem $record, array $data) => $record->update(['order_status' => OrderStatus::Ordered, 'expected_on' => $data['expected_on'] ?? null])),
+                Action::make('markReceived')
+                    ->label('Mark received')
+                    ->icon(Heroicon::OutlinedCheck)
+                    ->color('success')
+                    ->visible(fn (ProjectLineItem $record): bool => $record->order_status === OrderStatus::Ordered)
+                    ->action(fn (ProjectLineItem $record) => $record->update(['order_status' => OrderStatus::Received])),
                 EditAction::make(),
                 DeleteAction::make(),
             ])

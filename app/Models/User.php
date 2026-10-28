@@ -16,15 +16,17 @@ use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Spatie\OneTimePasswords\Models\Concerns\HasOneTimePasswords;
 
 #[Fillable(['name', 'email', 'password'])]
 #[Hidden(['password', 'remember_token', 'app_authentication_secret', 'app_authentication_recovery_codes', 'calendar_feed_token'])]
 class User extends Authenticatable implements FilamentUser, HasAppAuthentication, HasAppAuthenticationRecovery
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, Notifiable;
+    use HasFactory, HasOneTimePasswords, InteractsWithAppAuthentication, InteractsWithAppAuthenticationRecovery, Notifiable;
 
     /**
      * `role` is deliberately not fillable: it decides admin access, so set it explicitly.
@@ -41,6 +43,44 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     }
 
     /**
+     * The clients whose portal this person can sign in to. A trashed client drops out.
+     *
+     * @return BelongsToMany<Client, $this, ClientUser, 'access'>
+     */
+    public function clients(): BelongsToMany
+    {
+        return $this->belongsToMany(Client::class)
+            ->using(ClientUser::class)
+            ->as('access')
+            ->withPivot(['id', 'client_role', 'invited_at'])
+            ->withTimestamps();
+    }
+
+    /**
+     * A client's person with at least one portal to sign in to. Admins use /admin instead.
+     */
+    public function canUsePortal(): bool
+    {
+        return $this->role === UserRole::Client && $this->clients()->exists();
+    }
+
+    /**
+     * Admins can view the portal as one of its users (stechstudio/filament-impersonate).
+     */
+    public function canImpersonate(): bool
+    {
+        return $this->role->canAccessAdmin();
+    }
+
+    /**
+     * Only portal users: an admin is never signed in as another admin.
+     */
+    public function canBeImpersonated(): bool
+    {
+        return $this->role === UserRole::Client;
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -52,6 +92,7 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
             'password' => 'hashed',
             'role' => UserRole::class,
             'calendar_feed_read_at' => 'datetime',
+            'last_signed_in_at' => 'datetime',
         ];
     }
 

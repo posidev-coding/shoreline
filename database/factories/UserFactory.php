@@ -2,7 +2,9 @@
 
 namespace Database\Factories;
 
+use App\Enums\ClientUserRole;
 use App\Enums\UserRole;
+use App\Models\Client;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Hash;
@@ -57,6 +59,15 @@ class UserFactory extends Factory
         return $this->state(fn (array $attributes) => [
             'role' => UserRole::Owner,
         ]);
+    }
+
+    /**
+     * Someone who signs in to the client's portal with an emailed code, so has no password.
+     */
+    public function portalUserOf(Client $client, ClientUserRole $role = ClientUserRole::Primary): static
+    {
+        return $this->state(fn (array $attributes) => ['password' => null])
+            ->afterCreating(fn (User $user) => $client->portalUsers()->attach($user->getKey(), ['client_role' => $role->value]));
     }
 
     /**

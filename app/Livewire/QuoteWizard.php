@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Notifications\NewLead;
 use App\Support\HurricaneReadiness;
 use App\Support\QuoteQuestions;
+use App\Support\VisitorIp;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
@@ -316,17 +317,9 @@ class QuoteWizard extends Component
         return view('livewire.quote-wizard');
     }
 
-    /**
-     * The visitor's address. On Laravel Cloud, every request comes through Cloudflare, which
-     * sets CF-Connecting-IP; the proxy chain behind it decides what request()->ip() returns.
-     */
     public static function clientIp(Request $request): string
     {
-        $cloudflare = laravel_cloud() ? $request->header('CF-Connecting-IP') : null;
-
-        return is_string($cloudflare) && filter_var($cloudflare, FILTER_VALIDATE_IP) !== false
-            ? $cloudflare
-            : (string) $request->ip();
+        return VisitorIp::from($request);
     }
 
     /**

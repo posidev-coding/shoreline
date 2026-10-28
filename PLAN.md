@@ -344,9 +344,19 @@ Conventions:
   - **ICS feed:** each admin makes a private link on the Schedule page. Only its hash is stored, so the link is shown once; making a new one or turning it off kills the old one. It carries names, addresses, phone numbers, and visit notes, never access info, and is served with no session and `Cache-Control: no-store`.
   - Decided in M3c: the owner uses **Google Calendar**, which refreshes a subscribed feed only every several hours and ignores the feed's refresh hint, so a visit booked that morning may not reach his phone that day. The Schedule and the dashboard are the same-day truth. Writing visits straight into his Google Calendar (a Google Cloud project and Workspace domain-wide delegation) would remove the lag; it's an option for later and needs Taylor's go-ahead for the outward-facing setup.
 
-**M4 Portal (no money yet)**
-- Code/link login, invites, dashboard, project pages, photos, documents, messages.
-- Impersonation banner.
+**M4 Portal (no money yet)** (three PRs, each checked on staging)
+- **M4a Sign-in and access:**
+  - `client_user` with `client_role` (primary / manager / billing / viewer) and `invited_at`. Not `role`: Filament puts a pivot's columns and casts on the related rows, where `users.role` already is.
+  - A client's **Portal** tab: Invite to portal (their name and email filled in), Resend invitation, Change role, Remove access (removing someone's last access deletes them), and View their portal (impersonation, with its banner). Invitations, role changes, removals, and every impersonation go in the activity log.
+  - **Sign-in:** an email address, then a 6-digit code, emailed with a link that carries it. The link opens a page whose button signs in (a POST), so a mail scanner opening the link can't use the code.
+    - Codes last 15 minutes and work once. They're stored as an HMAC keyed with the app key: a plain hash of six digits can be reversed in a moment.
+    - A code isn't tied to the browser or network that asked for it (the package's default), because the link is often opened in a mail app's browser or on another device.
+    - Limits: 3 codes per address per 10 minutes and 10 per network per hour; 5 wrong codes per person per 10 minutes and 20 per network. The answer, and how long it takes, are the same whether or not the address has a portal.
+    - A portal user stays signed in on the device.
+  - **Portal:** the next visit, jobs under way, and finished jobs; a job's page has its address and visits. Lost, cancelled, and deleted jobs don't show. Job URLs use a ULID, and someone else's job is a 404.
+  - Decided in M4a: visit notes, the scope of work, and project photos stay out of the portal until M4b decides what's shared, since the admin labels photos "Private" and nothing told the owner the scope is client-facing. Roles are stored but gate nothing until messages (M4c) and estimates (M6). Admins can view a client's portal; viewing as the owner waits for the Users resource. The site footer links "Client sign-in".
+- **M4b Project page:** the client-visible timeline, photos, and documents. Decide first what's shared by default.
+- **M4c Messages and notification emails:** one thread per job, and emails for a new message, a visit scheduled or confirmed, and a job completed.
 
 **M5 QuickBooks inbound**
 - Sandbox OAuth and TokenManager.

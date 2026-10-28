@@ -10,6 +10,7 @@ use Database\Factories\ProjectFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Concerns\HasUlids;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -39,7 +40,7 @@ class Project extends Model implements HasMedia
     public const string BOARD_GAP = '65535';
 
     /** @use HasFactory<ProjectFactory> */
-    use HasFactory, InteractsWithMedia, LogsActivity, SoftDeletes;
+    use HasFactory, HasUlids, InteractsWithMedia, LogsActivity, SoftDeletes;
 
     /**
      * @var array<string, mixed>
@@ -166,6 +167,28 @@ class Project extends Model implements HasMedia
     {
         // Dragging a card within its column isn't worth a history entry; a stage change is.
         return LogOptions::defaults()->logFillable()->logExcept(['board_position'])->logOnlyDirty()->dontLogEmptyChanges();
+    }
+
+    /**
+     * Only the ulid is generated: the id stays the key, and the portal's URLs use the ulid.
+     *
+     * @return list<string>
+     */
+    public function uniqueIds(): array
+    {
+        return ['ulid'];
+    }
+
+    /**
+     * The jobs a portal user may see: their clients' jobs, except ones that never happened.
+     *
+     * @param  Builder<self>  $query
+     */
+    #[Scope]
+    protected function visibleInPortalTo(Builder $query, User $user): void
+    {
+        $query->whereIn('client_id', $user->clients()->select('clients.id'))
+            ->whereNotIn('stage', ProjectStage::hiddenFromClients());
     }
 
     /**

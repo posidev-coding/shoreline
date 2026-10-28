@@ -159,6 +159,7 @@
                         <li><a href="{{ route('pages.hurricane-ready') }}" class="hover:text-white">Hurricane-ready check</a></li>
                         <li><a href="{{ route('contact') }}" class="hover:text-white">Contact</a></li>
                         <li><a href="{{ route('quote') }}" class="hover:text-white">Get a quote</a></li>
+                        <li><a href="{{ route('portal.login') }}" class="hover:text-white">Client sign-in</a></li>
                     </ul>
                 </div>
             </div>

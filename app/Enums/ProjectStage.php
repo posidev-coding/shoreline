@@ -60,6 +60,16 @@ enum ProjectStage: string implements HasColor, HasLabel
     }
 
     /**
+     * Jobs that never happened, which the client's portal leaves out.
+     *
+     * @return list<self>
+     */
+    public static function hiddenFromClients(): array
+    {
+        return [self::Lost, self::Cancelled];
+    }
+
+    /**
      * @return list<self>
      */
     public static function finished(): array

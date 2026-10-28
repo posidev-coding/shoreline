@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\ClientUserRole;
 use App\Enums\ContactMethod;
 use App\Enums\EquipmentType;
 use App\Enums\LeadStatus;
@@ -22,6 +23,7 @@ use App\Models\ServiceArea;
 use App\Models\Showcase;
 use App\Models\Supplier;
 use App\Models\Testimonial;
+use App\Models\User;
 use App\Support\Stock;
 use Illuminate\Database\Seeder;
 use RuntimeException;
@@ -192,6 +194,10 @@ class DemoSeeder extends Seeder
             'description' => 'Demo project: the opener grinds on the way up.',
         ])->visits()->create(['type' => VisitType::SiteMeasure, 'starts_at' => $today->clone()->utc(), 'ends_at' => $today->clone()->addHour()->utc()]);
 
+        // Portal logins for both demo clients: sign in at /portal with either address, and the
+        // code lands in storage/logs/laravel.log once the queue worker (composer run dev) sends it.
+        $homeowner->portalUsers()->attach(User::query()->create(['name' => 'Demo Homeowner', 'email' => 'homeowner@example.com'])->getKey(), ['client_role' => ClientUserRole::Primary->value]);
+
         $rentals = Client::query()->create([
             'display_name' => 'Demo Beach Rentals',
             'company' => 'Demo Beach Rentals',
@@ -199,6 +205,8 @@ class DemoSeeder extends Seeder
             'phone' => '+12525550191',
             'is_property_manager' => true,
         ]);
+        $rentals->portalUsers()->attach(User::query()->create(['name' => 'Demo Manager', 'email' => 'rentals@example.com'])->getKey(), ['client_role' => ClientUserRole::Manager->value]);
+
         foreach (['8 Demo Ocean Dr', '14 Demo Ocean Dr'] as $index => $street) {
             $rental = $rentals->properties()->create([
                 'label' => 'Demo rental '.($index + 1),

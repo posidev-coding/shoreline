@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
@@ -52,6 +53,20 @@ class Client extends Model
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class);
+    }
+
+    /**
+     * The people who can sign in to this client's portal.
+     *
+     * @return BelongsToMany<User, $this, ClientUser, 'access'>
+     */
+    public function portalUsers(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class)
+            ->using(ClientUser::class)
+            ->as('access')
+            ->withPivot(['id', 'client_role', 'invited_at'])
+            ->withTimestamps();
     }
 
     /**

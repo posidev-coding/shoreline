@@ -371,12 +371,16 @@ Conventions:
   - Admins viewing a client's portal can read the thread but can't post from it or mark it read.
   - Decided in M4c: no unsubscribe link. These are transactional emails about the client's own jobs, which CAN-SPAM doesn't require one for; `email_preferences` arrives with review requests and the hurricane-prep email, which do need one. No attachments in messages, and replies by email don't land in the thread.
 
-**M5 QuickBooks inbound**
-- Sandbox OAuth and TokenManager.
-- Item and customer import with the matching wizard.
-- Estimate, invoice, and payment mirrors (read-only).
-- Webhooks, CDC, Sync Issues UI.
-- Submit the Intuit production-key questionnaire.
+**M5 QuickBooks inbound** (three PRs, each checked on staging)
+- **M5a Connect:**
+  - `quickbooks_connections` (one row: reconnecting the same company updates it; another company is refused until this one is forgotten) and `quickbooks_sync_logs` (every call to Intuit with its `intuit_tid`, kept 30 days by the weekly `model:prune`). Both tables need `#[Table]`: Laravel makes `quick_books_…` of the class names.
+  - **TokenManager:** connect, refresh, disconnect, as described under "Client and tokens". A refresh skips itself when another process refreshed first (or, after a 401, when the stored token is no longer the rejected one). Token-call logs are written after the transaction, so a failed refresh, which rolls back, keeps its log.
+  - **QuickBooksClient:** get, post, read, `queryAll` (pages of up to 1,000), and the company's details. A 401 refreshes and retries once; a 429 is a rate-limited `QuickBooksException` for the job to back off (the job middleware arrives with the first jobs, in M5b).
+  - **Settings → QuickBooks** (super admins): Connect, Check the connection, Disconnect (revokes with Intuit; disconnects even if the revoke fails), Forget this company. It shows the company, the tokens' expiries, the exact redirect URI, and four company settings from QuickBooks' Preferences. Intuit's sign-in returns to `/admin/quickbooks/callback`, a panel page (so it has the admin's sign-in and MFA) that checks the OAuth `state` this session sent.
+  - **`app:quickbooks-refresh`**, daily: refreshes even a fresh token, so the refresh token never lapses and each rotated one is saved, reloads the company's details, and reminds super admins 60, 30, 14, 7, 3, and 1 days before the five-year limit. `invalid_grant` disconnects and tells them.
+  - Decided in M5a: the sandbox test needs a connected company, so it runs from staging's Commands tab after Connect works there, as a command in M5b. A cloud session can call the sandbox but can't receive Intuit's redirect.
+- **M5b Import:** the sandbox test, items into `catalog_items`, then customers with the matching wizard.
+- **M5c Inbound:** estimate, invoice, and payment mirrors (read-only); webhooks, the CDC sweep, and the Sync Issues screen. Staging's HTTP basic auth will refuse Intuit's webhooks, which can't send a password, so this needs a path exempted or another way in. Then submit the Intuit production-key questionnaire.
 - **First spike:** in the sandbox, confirm that `TxnStatus=Accepted` is writable, what `invoiceLink` requires, how AST behaves on estimates, merge-event semantics, and the CustomTxnNumbers behavior.
 
 **M6 QuickBooks outbound + portal money**
@@ -473,6 +477,8 @@ Conventions:
 - Whether `Active IN (true,false)` queries work.
 - Whether CustomTxnNumbers produces a blank DocNumber.
 - Whether `:` is allowed in DisplayName.
+- The name of the token response field that reports the refresh token's five-year limit. The app asks for it with `x-include-refresh-token-hard-expires-in: true` and reads `x_refresh_token_hard_expires_in`; the sync log records which fields each token response had, without their values.
+- What the Preferences flags shown on the QuickBooks page mean: `TaxPrefs.PartnerTaxEnabled` for automated sales tax, and `SalesFormsPrefs.AllowOnlineCreditCardPayment` and `AllowOnlineACHPayment` for QB Payments.
 
 **Laravel Cloud**
 - ~~Whether Cloud's imagick decodes HEIC.~~ Verified on staging in M2: `app:cloud-smoke` decoded a sample HEIC (320×240). M0 had shown only that imagick *lists* HEIC, which proves nothing: a cloud session's imagick listed it too and couldn't decode one until libheif's HEVC plugin (`libheif-plugin-libde265`) was installed. The sample is a simple single-image HEIC, while iPhones save tiled images with depth data, so a real iPhone upload through the quote form is the last check.

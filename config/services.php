@@ -34,6 +34,14 @@ return [
         'secret' => env('TURNSTILE_SECRET_KEY'),
     ],
 
+    // QuickBooks Online (App\Services\QuickBooks). Development keys and the sandbox until the
+    // production questionnaire is approved; production keys only ever go with "production".
+    'quickbooks' => [
+        'client_id' => env('QUICKBOOKS_CLIENT_ID'),
+        'client_secret' => env('QUICKBOOKS_CLIENT_SECRET'),
+        'environment' => env('QUICKBOOKS_ENVIRONMENT', 'sandbox'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

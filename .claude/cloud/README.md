@@ -55,6 +55,16 @@ COMPOSER_NO_INTERACTION=1
 PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
 ```
 
+From M5, add the Intuit app's **Development** keys to test against the QuickBooks sandbox, never production ones (they're readable here, as above):
+
+```text
+QUICKBOOKS_CLIENT_ID=…
+QUICKBOOKS_CLIENT_SECRET=…
+QUICKBOOKS_ENVIRONMENT=sandbox
+```
+
+A session can call the sandbox API, but can't receive Intuit's sign-in redirect, so connecting happens on staging. Tests never read these: `phpunit.xml` forces fake keys.
+
 `DB_*` is deliberately left out. Real environment variables override `.env`, and they'd also beat `phpunit.xml`'s `<env>` entries unless those have `force="true"`. That could point tests at the dev database.
 
 **Setup script:** paste the entire contents of [`setup-script.sh`](setup-script.sh).

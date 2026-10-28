@@ -13,3 +13,9 @@ Schedule::command('app:prune-uploads')->daily();
 
 // Weekly. Keeps a year of the activity log (activitylog.clean_after_days).
 Schedule::command('activitylog:clean --force')->weekly();
+
+// Daily. Keeps the QuickBooks refresh token from lapsing, and checks the connection still works.
+Schedule::command('app:quickbooks-refresh')->daily();
+
+// Weekly. Prunes models that say how (QuickBooks sync logs after 30 days).
+Schedule::command('model:prune')->weekly();

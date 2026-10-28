@@ -80,6 +80,15 @@ TURNSTILE_SITE_KEY=<the widget's site key>
 
 Put `TURNSTILE_SECRET_KEY` in the Secrets Manager. Without both, the form still works, guarded only by its honeypot and hourly limit, and the dashboard's launch checklist says the check is off.
 
+From M5, QuickBooks. In the Intuit Developer app, list `https://<the environment's domain>/admin/quickbooks/callback` under the keys' **Redirect URIs** (staging uses the Development keys and the sandbox; production waits for Intuit's questionnaire), then set:
+
+```ini
+QUICKBOOKS_CLIENT_ID=<the keys' client ID>
+QUICKBOOKS_ENVIRONMENT=sandbox
+```
+
+Put `QUICKBOOKS_CLIENT_SECRET` in the Secrets Manager, and redeploy. Then a super admin opens **Settings → QuickBooks** in `/admin` and connects. The page shows the exact redirect URI the app sends, which must match the one in the Intuit app.
+
 Don't set `DB_*`, `AWS_*`, `FILESYSTEM_DISK`, or `QUEUE_CONNECTION` by hand: custom variables override the injected ones.
 
 ## 5. Check that M0 is done

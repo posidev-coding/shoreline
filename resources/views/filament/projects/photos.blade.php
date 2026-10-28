@@ -9,7 +9,7 @@
     @if ($photos->isEmpty())
         <p class="text-sm text-gray-500 dark:text-gray-400">No photos yet. Add them with Edit, from your phone on site.</p>
     @else
-        @include('filament.partials.photo-grid', ['photos' => $photos])
+        @include('filament.partials.photo-grid', ['photos' => $photos, 'showSharing' => true])
     @endif
 
     @if ($requestPhotos->isNotEmpty())

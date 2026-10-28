@@ -15,8 +15,8 @@ use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Table;
 
 /**
- * The project's timeline: notes on what happened. Shared entries are what the client
- * will see in their portal (M4).
+ * The project's timeline: notes on what happened. Shared entries show on the job's page in
+ * the client's portal, dated but without who wrote them.
  */
 class UpdatesRelationManager extends RelationManager
 {
@@ -34,7 +34,7 @@ class UpdatesRelationManager extends RelationManager
                     ->rows(3),
                 Toggle::make('is_visible_to_client')
                     ->label('Share with the client')
-                    ->helperText('Shared updates will show in their portal, once it opens. The rest stay your own notes.'),
+                    ->helperText('Shared updates show on this job in their portal. The rest stay your own notes.'),
             ]);
     }
 

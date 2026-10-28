@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Collection;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 use Spatie\Image\Enums\Fit;
@@ -38,6 +39,12 @@ class Project extends Model implements HasMedia
      * Room between neighboring cards on the board, the same as Flowforge leaves.
      */
     public const string BOARD_GAP = '65535';
+
+    /**
+     * The custom property that puts a photo or document in the client's portal. Files without
+     * it stay private, like every photo taken before the portal showed any.
+     */
+    public const string IN_PORTAL = 'in_portal';
 
     /** @use HasFactory<ProjectFactory> */
     use HasFactory, HasUlids, InteractsWithMedia, LogsActivity, SoftDeletes;
@@ -149,9 +156,26 @@ class Project extends Model implements HasMedia
         );
     }
 
+    /**
+     * The photos or documents the client sees in the portal: the ones marked to show there.
+     *
+     * @return Collection<int, Media>
+     */
+    public function sharedMedia(string $collection): Collection
+    {
+        return $this->getMedia($collection, fn (Media $media): bool => self::isInPortal($media));
+    }
+
+    public static function isInPortal(Media $media): bool
+    {
+        return $media->getCustomProperty(self::IN_PORTAL) === true;
+    }
+
     public function registerMediaCollections(): void
     {
         $this->addMediaCollection('photos')->useDisk('private');
+        // Warranty papers, permits, manuals: private unless marked to show in the portal.
+        $this->addMediaCollection('documents')->useDisk('private');
     }
 
     public function registerMediaConversions(?Media $media = null): void

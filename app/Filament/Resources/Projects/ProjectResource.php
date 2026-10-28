@@ -7,6 +7,7 @@ use App\Filament\Resources\Projects\Pages\EditProject;
 use App\Filament\Resources\Projects\Pages\ListProjects;
 use App\Filament\Resources\Projects\Pages\ProjectHistory;
 use App\Filament\Resources\Projects\Pages\ViewProject;
+use App\Filament\Resources\Projects\RelationManagers\FilesRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\LineItemsRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\TasksRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\UpdatesRelationManager;
@@ -59,6 +60,7 @@ class ProjectResource extends Resource
             VisitsRelationManager::class,
             TasksRelationManager::class,
             UpdatesRelationManager::class,
+            FilesRelationManager::class,
         ];
     }
 

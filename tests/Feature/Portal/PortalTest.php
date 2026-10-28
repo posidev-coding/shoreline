@@ -5,10 +5,13 @@ use App\Enums\ProjectStage;
 use App\Enums\VisitStatus;
 use App\Models\Client;
 use App\Models\Project;
+use App\Models\ProjectUpdate;
 use App\Models\Property;
 use App\Models\User;
 use App\Models\Visit;
 use App\Support\PortalAccess;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 
 beforeEach(function () {
     $this->client = Client::factory()->create(['display_name' => 'Jane Homeowner']);
@@ -85,6 +88,50 @@ it('shows visits without the owner’s notes, and the next one first', function 
     $this->get(route('portal.projects.show', $project->ulid))
         ->assertSee(['We’ll confirm the time with you.', 'Earlier'])
         ->assertDontSee('Bring the big ladder');
+});
+
+it('shows the updates shared with the client, without who wrote them', function () {
+    $project = jobFor($this->property, 'Our new door');
+    $author = User::factory()->owner()->create(['name' => 'Owen Owner']);
+    ProjectUpdate::factory()->for($project)->create(['user_id' => $author->getKey(), 'body' => "Parts ordered.\nThey arrive Thursday.", 'is_visible_to_client' => true]);
+    ProjectUpdate::factory()->for($project)->create(['body' => 'Client seems price-sensitive', 'is_visible_to_client' => false]);
+
+    $this->actingAs($this->user)
+        ->get(route('portal.projects.show', $project->ulid))
+        ->assertSee('Updates')
+        ->assertSee("Parts ordered.\nThey arrive Thursday.")
+        ->assertDontSee(['Client seems price-sensitive', 'Owen Owner']);
+});
+
+it('shows only the photos and documents marked for the portal', function () {
+    Storage::fake('private');
+    $project = jobFor($this->property, 'Our new door');
+    $add = fn (UploadedFile $file, string $collection, ?bool $inPortal) => $project
+        ->addMedia($file)
+        ->withCustomProperties($inPortal === null ? [] : [Project::IN_PORTAL => $inPortal])
+        ->toMediaCollection($collection);
+
+    $shared = $add(UploadedFile::fake()->image('shared.jpg'), 'photos', true);
+    $add(UploadedFile::fake()->image('hidden.jpg'), 'photos', false);
+    $add(UploadedFile::fake()->image('from-before.jpg'), 'photos', null);
+    $add(UploadedFile::fake()->create('Clopay warranty.pdf', 40, 'application/pdf'), 'documents', true);
+    $add(UploadedFile::fake()->create('Supplier invoice.pdf', 40, 'application/pdf'), 'documents', null);
+
+    $this->actingAs($this->user)
+        ->get(route('portal.projects.show', $project->ulid))
+        ->assertViewHas('photos', fn ($photos): bool => $photos->modelKeys() === [$shared->getKey()])
+        ->assertSee(['Photos', 'Clopay warranty', 'PDF'])
+        ->assertDontSee('Supplier invoice');
+});
+
+it('leaves out sections with nothing shared', function () {
+    $project = jobFor($this->property, 'Our new door');
+    ProjectUpdate::factory()->for($project)->create(['is_visible_to_client' => false]);
+
+    $this->actingAs($this->user)
+        ->get(route('portal.projects.show', $project->ulid))
+        ->assertOk()
+        ->assertDontSee(['id="updates"', 'id="photos"', 'id="documents"'], false);
 });
 
 it('signs someone out on their next page once their access is removed', function () {

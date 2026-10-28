@@ -12,8 +12,9 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
 /**
- * One job as its client sees it. A job that isn't theirs is a 404, the same as one that doesn't
- * exist, so its address can't be confirmed by trying.
+ * One job as its client sees it: visits, and the updates, photos, and documents the owner shared.
+ * A job that isn't theirs is a 404, the same as one that doesn't exist, so its address can't be
+ * confirmed by trying.
  */
 class ProjectController extends Controller
 {
@@ -25,7 +26,7 @@ class ProjectController extends Controller
         $project = Project::query()
             ->visibleInPortalTo($user)
             ->where('ulid', strtolower($ulid))
-            ->with(['client', 'property', 'visits'])
+            ->with(['client', 'property', 'visits', 'media'])
             ->firstOrFail();
 
         Gate::authorize('view', $project);
@@ -38,6 +39,10 @@ class ProjectController extends Controller
             'project' => $project,
             'upcoming' => $upcoming,
             'past' => $past->sortByDesc('starts_at'),
+            // Who wrote an update stays in the admin: the client hears from the business.
+            'updates' => $project->updates()->where('is_visible_to_client', true)->get(['id', 'body', 'created_at']),
+            'photos' => $project->sharedMedia('photos'),
+            'documents' => $project->sharedMedia('documents'),
         ]);
     }
 }

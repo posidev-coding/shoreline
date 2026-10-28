@@ -355,7 +355,12 @@ Conventions:
     - A portal user stays signed in on the device.
   - **Portal:** the next visit, jobs under way, and finished jobs; a job's page has its address and visits. Lost, cancelled, and deleted jobs don't show. Job URLs use a ULID, and someone else's job is a 404.
   - Decided in M4a: visit notes, the scope of work, and project photos stay out of the portal until M4b decides what's shared, since the admin labels photos "Private" and nothing told the owner the scope is client-facing. Roles are stored but gate nothing until messages (M4c) and estimates (M6). Admins can view a client's portal; viewing as the owner waits for the Users resource. The site footer links "Client sign-in".
-- **M4b Project page:** the client-visible timeline, photos, and documents. Decide first what's shared by default.
+- **M4b Project page:** the client-visible timeline, photos, and documents.
+  - **Shared by default:** new photos show in the portal; new documents don't. Every photo from before M4b stays private, since the owner took it when the admin said "Private: only you see them". A file shows only when its `in_portal` custom property is `true`, so a missing value means private and nothing needed migrating.
+  - A job's **Files** tab lists its photos and documents, each with an "In the portal" switch (and bulk Show and Hide), Open, and Delete. On the job's page, a shared photo is marked "In the portal".
+  - **Documents** (warranty papers, permits, manuals) are a second private collection on the job, uploaded on its Edit page: PDF, JPEG, PNG, WebP, Word, and Excel, up to the same 20 MB. They keep the name they were uploaded with, so the client's download has a sensible name. The owner is the only uploader.
+  - **Portal job page:** visits, then the shared updates (dated, never signed with who wrote them), photos (a thumbnail grid opening the full photo), and documents. A section with nothing shared doesn't show. Files open through 30-minute temporary links, the same as in the admin.
+  - Decided in M4b: the scope of work and visit notes stay out of the portal. The owner wrote both believing them private, and a shared timeline entry is a deliberate way to tell the client something. Showing the scope is a one-line change if he wants it. Sharing a file isn't written to the activity log.
 - **M4c Messages and notification emails:** one thread per job, and emails for a new message, a visit scheduled or confirmed, and a job completed.
 
 **M5 QuickBooks inbound**

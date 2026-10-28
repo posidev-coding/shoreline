@@ -16,6 +16,7 @@ it('seeds local demo photos that the admin’s upload fields can find', function
     // library assigns in a model event. Seeding without model events leaves it empty.
     expect(Showcase::query()->count())->toBe(3)
         ->and(Lead::query()->count())->toBe(3)
-        ->and(Media::query()->count())->toBe(8)
+        // Showcases' before and after, the leads' photos, and the spring job's two photos and warranty.
+        ->and(Media::query()->count())->toBe(11)
         ->and(Media::query()->whereNull('uuid')->count())->toBe(0);
 });

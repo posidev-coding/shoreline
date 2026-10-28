@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Models\User;
 use App\Policies\ActivityPolicy;
+use App\Policies\MediaPolicy;
 use App\Settings\SiteSettings;
 use App\View\Composers\SiteLayoutComposer;
 use Filament\Support\Facades\FilamentTimezone;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Spatie\Activitylog\Models\Activity;
+use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use STS\FilamentImpersonate\Events\EnterImpersonation;
 use STS\FilamentImpersonate\Events\LeaveImpersonation;
 
@@ -37,8 +39,9 @@ class AppServiceProvider extends ServiceProvider
 
         FilamentTimezone::set(config('app.business_timezone'));
 
-        // The activity log's model lives in the package, out of reach of policy discovery.
+        // The activity log's and media library's models live in their packages, out of reach of policy discovery.
         Gate::policy(Activity::class, ActivityPolicy::class);
+        Gate::policy(Media::class, MediaPolicy::class);
 
         // When each person last signed in, for the client's Portal tab. Without touching updated_at.
         Event::listen(Login::class, function (Login $event): void {

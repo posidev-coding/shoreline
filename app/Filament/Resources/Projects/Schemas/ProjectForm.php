@@ -4,7 +4,9 @@ namespace App\Filament\Resources\Projects\Schemas;
 
 use App\Enums\ProjectStage;
 use App\Models\Client;
+use App\Models\Project;
 use App\Models\Property;
+use App\Support\PrivateMedia;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\SpatieMediaLibraryFileUpload;
 use Filament\Forms\Components\Textarea;
@@ -18,6 +20,16 @@ use Livewire\Component;
 
 class ProjectForm
 {
+    /**
+     * PDFs, pictures, and Word and Excel files.
+     */
+    public const array DOCUMENT_TYPES = [
+        'application/pdf',
+        ...PrivateMedia::BROWSER_IMAGES,
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    ];
+
     public static function configure(Schema $schema): Schema
     {
         return $schema
@@ -66,17 +78,31 @@ class ProjectForm
                             ->columnSpanFull(),
                     ]),
                 Section::make('Photos')
-                    ->description('Private: only you see them. Take them on site from your phone.')
+                    ->description('Take them on site from your phone. New photos show in the client’s portal; hide one on the Files tab.')
                     ->schema([
                         SpatieMediaLibraryFileUpload::make('photos')
                             ->hiddenLabel()
                             ->collection('photos')
                             ->conversion('thumb')
+                            ->customProperties([Project::IN_PORTAL => true])
                             ->multiple()
                             ->reorderable()
                             ->panelLayout('grid')
                             ->image()
-                            ->acceptedFileTypes(['image/jpeg', 'image/png', 'image/webp'])
+                            ->acceptedFileTypes(PrivateMedia::BROWSER_IMAGES)
+                            ->maxSize(intdiv((int) config('media-library.max_file_size'), 1024)),
+                    ]),
+                Section::make('Documents')
+                    ->description('Warranty papers, permits, manuals. They stay private until you show one in the portal on the Files tab.')
+                    ->schema([
+                        SpatieMediaLibraryFileUpload::make('documents')
+                            ->hiddenLabel()
+                            ->collection('documents')
+                            ->multiple()
+                            ->reorderable()
+                            // The client downloads it under the name it was uploaded with.
+                            ->preserveFilenames()
+                            ->acceptedFileTypes(self::DOCUMENT_TYPES)
                             ->maxSize(intdiv((int) config('media-library.max_file_size'), 1024)),
                     ]),
             ]);

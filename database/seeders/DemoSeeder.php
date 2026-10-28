@@ -18,6 +18,7 @@ use App\Enums\VisitType;
 use App\Models\Client;
 use App\Models\Lead;
 use App\Models\Part;
+use App\Models\Project;
 use App\Models\Service;
 use App\Models\ServiceArea;
 use App\Models\Showcase;
@@ -186,6 +187,14 @@ class DemoSeeder extends Seeder
         $springJob->tasks()->create(['title' => 'Bring winding bars', 'sort_order' => 0]);
         $springJob->tasks()->create(['title' => 'Lube rollers and hinges', 'sort_order' => 1]);
 
+        // What the homeowner sees on the job in the portal: the shared update, photo, and document.
+        $springJob->updates()->create(['body' => "Springs and cables are on the truck.\nSee you tomorrow at 9.", 'is_visible_to_client' => true]);
+        $springJob->updates()->create(['body' => 'Demo private note: the bottom seal is worn too. Quote it on site.']);
+        $springJob->addMedia($this->door(rusted: true))->usingName('IMG_0520')->withCustomProperties([Project::IN_PORTAL => true])->toMediaCollection('photos');
+        $springJob->addMedia($this->door(rusted: false))->usingName('IMG_0521')->toMediaCollection('photos');
+        $springJob->addMedia($this->pdf('Demo spring warranty'))->usingName('Demo spring warranty')->usingFileName('Demo-spring-warranty.pdf')
+            ->withCustomProperties([Project::IN_PORTAL => true])->toMediaCollection('documents');
+
         // Something on today's schedule, for the dashboard and the calendar.
         $today = now(config('app.business_timezone'))->setTime(15, 0);
         $home->projects()->create([
@@ -281,6 +290,39 @@ class DemoSeeder extends Seeder
         }
 
         return $color;
+    }
+
+    /**
+     * Writes a one-page PDF with a title and returns its temporary path.
+     */
+    private function pdf(string $title): string
+    {
+        $text = 'BT /F1 24 Tf 72 720 Td ('.addcslashes($title, '()\\').') Tj ET';
+        $objects = [
+            '<< /Type /Catalog /Pages 2 0 R >>',
+            '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+            '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+            '<< /Length '.strlen($text)." >>\nstream\n{$text}\nendstream",
+            '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+        ];
+
+        $pdf = "%PDF-1.4\n";
+        $offsets = [];
+        foreach ($objects as $index => $object) {
+            $offsets[] = strlen($pdf);
+            $pdf .= ($index + 1)." 0 obj\n{$object}\nendobj\n";
+        }
+        $xref = strlen($pdf);
+        $pdf .= 'xref'."\n0 ".(count($objects) + 1)."\n0000000000 65535 f \n";
+        foreach ($offsets as $offset) {
+            $pdf .= sprintf("%010d 00000 n \n", $offset);
+        }
+        $pdf .= 'trailer << /Size '.(count($objects) + 1)." /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF\n";
+
+        $path = tempnam(sys_get_temp_dir(), 'demo-document').'.pdf';
+        file_put_contents($path, $pdf);
+
+        return $path;
     }
 
     /**

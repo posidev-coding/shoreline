@@ -306,7 +306,7 @@ class QuoteWizard extends Component
             ], $this->photos));
         }
 
-        Notification::send(User::leadRecipients(), new NewLead($lead));
+        Notification::send(User::alertRecipients(), new NewLead($lead));
         Mail::to($lead->email, $lead->name)->send(new QuoteRequestReceived($lead));
 
         $this->redirectRoute('quote.thanks');

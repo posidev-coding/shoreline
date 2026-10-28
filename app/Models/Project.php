@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\ProjectStage;
 use App\Enums\VisitStatus;
+use App\Support\ClientNotices;
 use App\Support\Stock;
 use Brick\Money\Money;
 use Database\Factories\ProjectFactory;
@@ -136,6 +137,16 @@ class Project extends Model implements HasMedia
     }
 
     /**
+     * The job's thread with the client, oldest first.
+     *
+     * @return HasMany<ProjectMessage, $this>
+     */
+    public function messages(): HasMany
+    {
+        return $this->hasMany(ProjectMessage::class)->orderBy('id');
+    }
+
+    /**
      * What this job installed, as recorded when it was completed.
      *
      * @return HasMany<InstalledEquipment, $this>
@@ -252,13 +263,14 @@ class Project extends Model implements HasMedia
             }
         });
 
-        // Finishing the job uses its stocked parts. Each line is deducted once, so reopening
-        // and completing again only deducts lines added since.
+        // Finishing the job uses its stocked parts and tells the client. Each line is deducted once,
+        // so reopening and completing again only deducts lines added since.
         static::saved(function (self $project): void {
             $justCompleted = $project->wasRecentlyCreated ? $project->completed_at !== null : $project->wasChanged('completed_at');
 
             if ($justCompleted && $project->completed_at !== null) {
                 app(Stock::class)->useOnProject($project);
+                ClientNotices::jobCompleted($project);
             }
         });
     }

@@ -71,6 +71,8 @@
         </section>
     @endif
 
+    <livewire:portal.messages :project="$project" />
+
     @if ($photos->isNotEmpty())
         <section aria-labelledby="photos" class="mt-10">
             <h2 id="photos" class="font-display text-2xl font-extrabold tracking-wide text-navy-900 uppercase">Photos</h2>

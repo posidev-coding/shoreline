@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enums\VisitStatus;
 use App\Enums\VisitType;
 use App\Models\Concerns\BelongsToProject;
+use App\Support\ClientNotices;
+use Carbon\CarbonInterface;
 use Database\Factories\VisitFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -14,6 +16,8 @@ use Spatie\Activitylog\Support\LogOptions;
 
 /**
  * A trip to the property with the arrival window promised to the client, shown on the calendar.
+ * The notified_* columns hold the window the client was last emailed; App\Support\ClientNotices
+ * writes them, never a form.
  *
  * @property-read Project $project
  */
@@ -36,14 +40,22 @@ class Visit extends Model
      */
     public function window(): string
     {
-        $starts = $this->starts_at->clone()->setTimezone(config('app.business_timezone'));
-        $ends = $this->ends_at->clone()->setTimezone(config('app.business_timezone'));
+        return self::formatWindow($this->starts_at, $this->ends_at);
+    }
+
+    /**
+     * The same, for any two moments, like the window a client was last told.
+     */
+    public static function formatWindow(CarbonInterface $startsAt, CarbonInterface $endsAt): string
+    {
+        $starts = $startsAt->clone()->setTimezone(config('app.business_timezone'));
+        $ends = $endsAt->clone()->setTimezone(config('app.business_timezone'));
 
         if (! $starts->isSameDay($ends)) {
             return $starts->format('D, M j · g:i A').' to '.$ends->format('D, M j · g:i A');
         }
 
-        return $starts->format('D, M j').' · '.$this->times();
+        return $starts->format('D, M j').' · '.self::formatTimes($starts, $ends);
     }
 
     /**
@@ -59,7 +71,15 @@ class Visit extends Model
             return $this->window();
         }
 
-        $time = fn ($moment): string => $moment->format($moment->minute === 0 ? 'g' : 'g:i');
+        return self::formatTimes($starts, $ends);
+    }
+
+    /**
+     * "8–10 AM" for two moments on the same day, already in the business's time zone.
+     */
+    private static function formatTimes(CarbonInterface $starts, CarbonInterface $ends): string
+    {
+        $time = fn (CarbonInterface $moment): string => $moment->format($moment->minute === 0 ? 'g' : 'g:i');
 
         return $starts->format('A') === $ends->format('A')
             ? $time($starts).'–'.$time($ends).' '.$ends->format('A')
@@ -71,6 +91,13 @@ class Visit extends Model
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
     }
 
+    protected static function booted(): void
+    {
+        // The client hears about a confirmed visit, a move, and one called off after they were told.
+        static::saved(fn (self $visit) => ClientNotices::visitSaved($visit));
+        static::deleted(fn (self $visit) => ClientNotices::visitDeleted($visit));
+    }
+
     protected function casts(): array
     {
         return [
@@ -78,6 +105,9 @@ class Visit extends Model
             'status' => VisitStatus::class,
             'starts_at' => 'datetime',
             'ends_at' => 'datetime',
+            'client_notified_at' => 'datetime',
+            'notified_starts_at' => 'datetime',
+            'notified_ends_at' => 'datetime',
         ];
     }
 }

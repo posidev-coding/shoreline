@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Projects\Pages;
 
 use App\Enums\EquipmentType;
 use App\Filament\Resources\Projects\Actions\ChangeStageAction;
+use App\Filament\Resources\Projects\Pages\Concerns\MarksMessagesRead;
 use App\Filament\Resources\Projects\ProjectResource;
 use App\Filament\Resources\Properties\PropertyResource;
 use App\Models\InstalledEquipment;
@@ -32,6 +33,8 @@ use Illuminate\Contracts\Support\Htmlable;
  */
 class ViewProject extends ViewRecord
 {
+    use MarksMessagesRead;
+
     protected static string $resource = ProjectResource::class;
 
     public function getTitle(): string|Htmlable

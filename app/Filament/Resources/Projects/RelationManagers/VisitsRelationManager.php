@@ -47,6 +47,11 @@ class VisitsRelationManager extends RelationManager
                     ->limit(60)
                     ->placeholder('None')
                     ->toggleable(),
+                TextColumn::make('client_notified_at')
+                    ->label('Client emailed')
+                    ->dateTime('M j, g:i A')
+                    ->placeholder('No')
+                    ->toggleable(),
             ])
             ->headerActions([
                 CreateAction::make()

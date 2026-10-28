@@ -27,7 +27,7 @@ class VisitForm
             Select::make('status')
                 ->options(VisitStatus::class)
                 ->default(VisitStatus::Tentative)
-                ->helperText('Confirmed once the client has agreed to the time.')
+                ->helperText('Confirmed once the client has agreed to the time. Their portal users are emailed when it’s confirmed, moved, or deleted.')
                 ->required(),
             DateTimePicker::make('starts_at')
                 ->label('Arrive between')
@@ -43,6 +43,7 @@ class VisitForm
                 ->after('starts_at')
                 ->validationMessages(['after' => 'The window has to end after it starts.']),
             Textarea::make('notes')
+                ->helperText('Only you see these.')
                 ->rows(2)
                 ->columnSpanFull(),
         ];

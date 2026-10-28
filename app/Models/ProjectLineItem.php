@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\OrderStatus;
 use App\Enums\ProjectStage;
+use App\Models\Concerns\BelongsToProject;
 use App\Support\Stock;
 use Brick\Math\BigDecimal;
 use Brick\Math\RoundingMode;
@@ -30,15 +31,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class ProjectLineItem extends Model
 {
     /** @use HasFactory<ProjectLineItemFactory> */
-    use HasFactory;
-
-    /**
-     * @return BelongsTo<Project, $this>
-     */
-    public function project(): BelongsTo
-    {
-        return $this->belongsTo(Project::class)->withTrashed();
-    }
+    use BelongsToProject, HasFactory;
 
     /**
      * @return BelongsTo<Part, $this>

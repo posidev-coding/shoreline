@@ -143,7 +143,8 @@ it('schedules a visit in local time and shows its arrival window', function () {
     // 8 AM Eastern is 1 PM UTC in November.
     expect($visit->starts_at->toDateTimeString())->toBe('2026-11-03 13:00:00')
         ->and($visit->status)->toBe(VisitStatus::Tentative)
-        ->and($visit->window())->toBe('Tue, Nov 3 · 8–10 AM');
+        ->and($visit->window())->toBe('Tue, Nov 3 · 8–10 AM')
+        ->and($visit->times())->toBe('8–10 AM');
 
     $visit->update(['ends_at' => $visit->starts_at->clone()->addHours(5)->addMinutes(30)]);
     expect($visit->window())->toBe('Tue, Nov 3 · 8 AM–1:30 PM');

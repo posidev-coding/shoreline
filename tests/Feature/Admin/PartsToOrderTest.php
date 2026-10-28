@@ -33,6 +33,18 @@ it('lists what’s still to order or on the way, grouped by supplier', function 
     expect(PartsToOrder::getNavigationBadge())->toBe('1');
 });
 
+it('leaves out parts for deleted jobs, in the list and in its count', function () {
+    $live = ProjectLineItem::factory()->create(['order_status' => OrderStatus::ToOrder]);
+    $trashed = ProjectLineItem::factory()->create(['order_status' => OrderStatus::ToOrder]);
+    $trashed->project->delete();
+
+    Livewire::test(PartsToOrder::class)
+        ->assertCanSeeTableRecords([$live])
+        ->assertCanNotSeeTableRecords([$trashed]);
+
+    expect(PartsToOrder::getNavigationBadge())->toBe('1');
+});
+
 it('marks a supplier’s parts ordered together, moving approved jobs along', function () {
     $approved = Project::factory()->stage(ProjectStage::Approved)->create();
     $lines = ProjectLineItem::factory()->count(2)->for($approved)->create(['order_status' => OrderStatus::ToOrder]);

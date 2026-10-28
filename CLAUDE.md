@@ -35,8 +35,12 @@ Several packages changed majors recently (Filament 5, Livewire 4, Pest 5, spatie
 - **Brand contrast**: orange (`signal`) buttons take navy text, and orange text on a light background is `signal-700`.
 - spatie/laravel-settings parses `@var` on settings properties and crashes on array shapes, so array properties get `@phpstan-var` only.
 - **Time zones:** the app runs in UTC, and people see `app.business_timezone` (America/New_York). Filament's default zone is set to it, so admin pickers convert. A wall-clock time with no date, like opening hours, needs `->timezone(config('app.timezone'))` to skip that conversion.
+  - Neither Eloquent nor a query binding converts a Carbon's zone: a time in Eastern is saved or compared as if it were UTC. Call `->utc()` first. `App\Support\BusinessCalendar` gives today and the week (Monday to Sunday) in Eastern.
+- **Calendar feeds** go in `routes/feeds.php`, which runs no middleware: no session, no cookies, no edge caching. The secret in the URL is the only credential, so it's stored hashed (`users.calendar_feed_token`) and shown once.
 - **Activity log:** it stores changed values as the model reads them, so an encrypted attribute would land in it as plain text. Leave encrypted attributes out with `logExcept()`, as `Property` does with the access info. A column with a database default also needs it in the model's `$attributes`, or the first logged change shows it going from null.
 - **Project pages** are view pages whose relation managers edit line items, visits, and tasks, so the panel turns off Filament's read-only relation managers on view pages.
+- **Visits and line items** load their project even when it's trashed. To leave out deleted jobs, use `withoutTrashedProjects()`: `whereHas('project')` doesn't, because the relation includes trashed projects.
+- **Widgets** in `app/Filament/Widgets` land on the dashboard by discovery. One that belongs to another page sets `$isDiscovered = false`, as `ScheduleCalendar` does. Widgets don't poll, so the environment can sleep.
 - **Stock** changes only through `App\Support\Stock`: `parts.on_hand` isn't fillable, and every change writes a `part_stock_movements` row. Never set `on_hand` directly.
 - **Option arrays keyed by record ids** (`mapWithKeys` into a Select or Radio) must be joined with `+`, not spread: `[...$a, 'new' => …]` renumbers the numeric keys, and the picked id no longer matches.
 - Tests run against the `shoreline_testing` Postgres database, which `phpunit.xml` forces. Don't switch tests to SQLite.

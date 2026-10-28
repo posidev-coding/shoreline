@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Http\Middleware\EnsurePortalUser;
 use App\Models\User;
 use App\Policies\ActivityPolicy;
 use App\Policies\MediaPolicy;
@@ -14,6 +15,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
+use Livewire\Livewire;
 use Spatie\Activitylog\Models\Activity;
 use Spatie\MediaLibrary\MediaCollections\Models\Media;
 use STS\FilamentImpersonate\Events\EnterImpersonation;
@@ -38,6 +40,10 @@ class AppServiceProvider extends ServiceProvider
         Model::preventLazyLoading(! $this->app->isProduction());
 
         FilamentTimezone::set(config('app.business_timezone'));
+
+        // A portal page's Livewire requests run the portal's check again, so someone whose access
+        // was removed can't keep posting from a page left open.
+        Livewire::addPersistentMiddleware([EnsurePortalUser::class]);
 
         // The activity log's and media library's models live in their packages, out of reach of policy discovery.
         Gate::policy(Activity::class, ActivityPolicy::class);

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\ClientUserRole;
 use App\Enums\UserRole;
 use Database\Factories\UserFactory;
 use Filament\Auth\MultiFactor\App\Concerns\InteractsWithAppAuthentication;
@@ -65,6 +66,16 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     }
 
     /**
+     * This person's role in one client's portal, or null without access to it.
+     */
+    public function portalRoleFor(Client $client): ?ClientUserRole
+    {
+        $client = $this->clients()->whereKey($client->getKey())->first();
+
+        return $client === null ? null : ClientUser::of($client)->client_role;
+    }
+
+    /**
      * Admins can view the portal as one of its users (stechstudio/filament-impersonate).
      */
     public function canImpersonate(): bool
@@ -97,12 +108,12 @@ class User extends Authenticatable implements FilamentUser, HasAppAuthentication
     }
 
     /**
-     * Who hears about new quote requests: the owner, or super admins until an owner account
-     * exists, so a lead is never announced to nobody.
+     * Who hears about new quote requests and clients' messages: the owner, or super admins until
+     * an owner account exists, so nothing is announced to nobody.
      *
      * @return Collection<int, self>
      */
-    public static function leadRecipients(): Collection
+    public static function alertRecipients(): Collection
     {
         $owners = self::query()->where('role', UserRole::Owner)->get();
 

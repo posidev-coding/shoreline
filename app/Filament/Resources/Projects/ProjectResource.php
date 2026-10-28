@@ -9,6 +9,7 @@ use App\Filament\Resources\Projects\Pages\ProjectHistory;
 use App\Filament\Resources\Projects\Pages\ViewProject;
 use App\Filament\Resources\Projects\RelationManagers\FilesRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\LineItemsRelationManager;
+use App\Filament\Resources\Projects\RelationManagers\MessagesRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\TasksRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\UpdatesRelationManager;
 use App\Filament\Resources\Projects\RelationManagers\VisitsRelationManager;
@@ -53,14 +54,18 @@ class ProjectResource extends Resource
         return ProjectsTable::configure($table);
     }
 
+    /**
+     * Keyed by name, so a link can open a tab: ?relation=messages.
+     */
     public static function getRelations(): array
     {
         return [
-            LineItemsRelationManager::class,
-            VisitsRelationManager::class,
-            TasksRelationManager::class,
-            UpdatesRelationManager::class,
-            FilesRelationManager::class,
+            'line-items' => LineItemsRelationManager::class,
+            'visits' => VisitsRelationManager::class,
+            'checklist' => TasksRelationManager::class,
+            'timeline' => UpdatesRelationManager::class,
+            'messages' => MessagesRelationManager::class,
+            'files' => FilesRelationManager::class,
         ];
     }
 

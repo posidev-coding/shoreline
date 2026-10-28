@@ -151,10 +151,6 @@ class PortalUsersRelationManager extends RelationManager
      */
     private function access(User $user): ClientUser
     {
-        $access = $user->getRelation('access');
-
-        abort_unless($access instanceof ClientUser, 500);
-
-        return $access;
+        return ClientUser::of($user);
     }
 }

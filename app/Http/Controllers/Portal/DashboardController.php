@@ -8,11 +8,13 @@ use App\Http\Controllers\Controller;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\Visit;
+use App\Support\MessageThread;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * The portal's home: the next visit, the jobs under way, and the finished ones.
+ * The portal's home: the next visit, the jobs under way, and the finished ones, each marked when
+ * it has messages they haven't read.
  */
 class DashboardController extends Controller
 {
@@ -43,6 +45,12 @@ class DashboardController extends Controller
                 ->orderBy('starts_at')
                 ->first(),
             'showClientNames' => $projects->pluck('client_id')->unique()->count() > 1,
+            'unread' => MessageThread::unread($user)
+                ->whereIn('project_id', $projects->modelKeys())
+                ->toBase()
+                ->selectRaw('project_id, count(*) as unread')
+                ->groupBy('project_id')
+                ->pluck('unread', 'project_id'),
         ]);
     }
 }

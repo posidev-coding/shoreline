@@ -51,11 +51,11 @@ describe('the owner’s alert', function () {
         $admin = User::factory()->superAdmin()->create();
         User::factory()->create();
 
-        expect(User::leadRecipients()->modelKeys())->toBe([$admin->getKey()]);
+        expect(User::alertRecipients()->modelKeys())->toBe([$admin->getKey()]);
 
         $owner = User::factory()->owner()->create();
 
-        expect(User::leadRecipients()->modelKeys())->toBe([$owner->getKey()]);
+        expect(User::alertRecipients()->modelKeys())->toBe([$owner->getKey()]);
     });
 });
 

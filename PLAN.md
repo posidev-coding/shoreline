@@ -90,7 +90,7 @@ Conventions:
   - The kanban board shows `stage` only.
 - **visits**:
   - project_id, type (site measure / install / service / warranty), arrival window
-  - status (tentative / confirmed / done). `client_notified` arrives with the M4 notification emails.
+  - status (tentative / confirmed / done). `client_notified_at`, `notified_starts_at`, and `notified_ends_at` record the window the client was last emailed (M4c).
   - Visits feed the calendar and a signed ICS feed the owner can subscribe to on his phone.
 - **project_line_items**:
   - The working draft: `part_id` (optional; picking a part fills description, rate, and QB item), catalog_item_id, description, qty, rate, TAX/NON.
@@ -98,7 +98,7 @@ Conventions:
   - When a project is completed:
     - Stocked parts are deducted from stock.
     - The owner is prompted to record what was installed in installed_equipment, pre-filled from the line items.
-- **project_tasks** (checklist), **project_updates** (timeline entries with a `visible_to_client` flag), **messages** (one portal thread per project, `last_read_at` per participant).
+- **project_tasks** (checklist), **project_updates** (timeline entries with a `visible_to_client` flag), **project_messages** (one portal thread per project, `is_from_client` for the side) with **project_message_reads** (`last_read_message_id` per person: an id, not a time, since two messages can share a second).
 - **showcases**:
   - public before/after pairs: title, slug, **town only, never the street**, service, story, featured
   - photo-release consent flag; EXIF GPS is stripped
@@ -361,7 +361,15 @@ Conventions:
   - **Documents** (warranty papers, permits, manuals) are a second private collection on the job, uploaded on its Edit page: PDF, JPEG, PNG, WebP, Word, and Excel, up to the same 20 MB. They keep the name they were uploaded with, so the client's download has a sensible name. The owner is the only uploader.
   - **Portal job page:** visits, then the shared updates (dated, never signed with who wrote them), photos (a thumbnail grid opening the full photo), and documents. A section with nothing shared doesn't show. Files open through 30-minute temporary links, the same as in the admin.
   - Decided in M4b: the scope of work and visit notes stay out of the portal. The owner wrote both believing them private, and a shared timeline entry is a deliberate way to tell the client something. Showing the scope is a one-line change if he wants it. Sharing a file isn't written to the activity log.
-- **M4c Messages and notification emails:** one thread per job, and emails for a new message, a visit scheduled or confirmed, and a job completed.
+- **M4c Messages and notification emails:** one thread per job, and emails for a new message, a visit confirmed, moved, or called off, and a job finished.
+  - **Thread:** on the job's portal page (after the updates) and on the job's **Messages** tab in the admin, whose badge counts the client's unread messages. Opening either marks it read for that person. The portal dashboard marks a job with unread messages. Messages from the business are signed with its name, never the admin's. Plain text, up to 5,000 characters; a portal user can send 30 an hour.
+  - **Roles, decided in M4c:** Primary, Manager, and Billing can send messages; a Viewer reads only. Message emails go to those who can reply. Visit and job-finished emails go to Primary, Manager, and Viewer; Billing waits for the invoice emails in M6. The invite form's role descriptions say so.
+  - **Only portal users are emailed.** A client without portal access hears from the owner as before.
+  - **New message:** emailed 5 minutes later, and only by the newest unread message's notification, so a burst sends one email listing them all, and someone reading along in the portal gets none. The owner also gets it in the admin's bell; replying to his email reaches the client directly, and the email says only a reply on the job shows in their portal.
+  - **Visits:** a tentative visit sends nothing (it shows in the portal as "We’ll confirm the time with you"). Confirming one, or moving a confirmed one, emails 2 minutes later if its window still differs from the one last emailed, so a few quick drags on the calendar send one email, and moving it back sends none. Deleting a visit the client was told about, before it happened, emails that it's called off. The visit form says when the client is emailed, and the Visits tab shows when they were.
+  - **Job finished:** emailed 2 minutes after the job is marked completed (or closed), if it still is, so a card dropped on Completed by mistake and moved back sends nothing. Reopening and finishing again sends another.
+  - Admins viewing a client's portal can read the thread but can't post from it or mark it read.
+  - Decided in M4c: no unsubscribe link. These are transactional emails about the client's own jobs, which CAN-SPAM doesn't require one for; `email_preferences` arrives with review requests and the hurricane-prep email, which do need one. No attachments in messages, and replies by email don't land in the thread.
 
 **M5 QuickBooks inbound**
 - Sandbox OAuth and TokenManager.

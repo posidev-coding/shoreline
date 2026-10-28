@@ -25,6 +25,7 @@ use App\Models\Showcase;
 use App\Models\Supplier;
 use App\Models\Testimonial;
 use App\Models\User;
+use App\Support\MessageThread;
 use App\Support\Stock;
 use Illuminate\Database\Seeder;
 use RuntimeException;
@@ -205,7 +206,19 @@ class DemoSeeder extends Seeder
 
         // Portal logins for both demo clients: sign in at /portal with either address, and the
         // code lands in storage/logs/laravel.log once the queue worker (composer run dev) sends it.
-        $homeowner->portalUsers()->attach(User::query()->create(['name' => 'Demo Homeowner', 'email' => 'homeowner@example.com'])->getKey(), ['client_role' => ClientUserRole::Primary->value]);
+        $homeownerUser = User::query()->create(['name' => 'Demo Homeowner', 'email' => 'homeowner@example.com']);
+        $homeowner->portalUsers()->attach($homeownerUser->getKey(), ['client_role' => ClientUserRole::Primary->value]);
+
+        // A question and an answer the homeowner hasn't read yet. Written directly rather than
+        // through MessageThread, so seeding emails nobody.
+        $admin = User::query()->where('email', 'admin@example.com')->first();
+        $question = $springJob->messages()->create(['user_id' => $homeownerUser->getKey(), 'is_from_client' => true, 'body' => 'Demo: is there anything I should do before you come?']);
+        $question->forceFill(['created_at' => now()->subDay()])->save();
+        $answer = $springJob->messages()->create(['user_id' => $admin?->getKey(), 'is_from_client' => false, 'body' => "Demo: just clear a path to the door and unplug the opener.\nSee you tomorrow!"]);
+        MessageThread::markRead($springJob, $homeownerUser, $question->getKey());
+        if ($admin) {
+            MessageThread::markRead($springJob, $admin, $answer->getKey());
+        }
 
         $rentals = Client::query()->create([
             'display_name' => 'Demo Beach Rentals',

@@ -24,7 +24,10 @@
                 @if ($showClientNames)
                     <p class="text-xs font-bold tracking-widest text-navy-600 uppercase">{{ $project->client->display_name }}</p>
                 @endif
-                <p class="text-lg font-bold text-navy-900">{{ $project->title }}</p>
+                <p class="flex flex-wrap items-center gap-x-3 gap-y-1 text-lg font-bold text-navy-900">
+                    {{ $project->title }}
+                    @include('portal.partials.unread', ['count' => (int) ($unread[$project->getKey()] ?? 0)])
+                </p>
                 <p class="text-navy-700">{{ $project->property->street }}, {{ $project->property->city }}</p>
                 <p class="mt-3 flex items-center gap-2 text-sm text-navy-800">
                     <x-heroicon-o-calendar-days class="size-4 shrink-0 text-signal-700" aria-hidden="true" />
@@ -49,6 +52,7 @@
                         <a href="{{ route('portal.projects.show', $project->ulid) }}" class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-5 py-4 hover:bg-sand-50">
                             <span>
                                 <span class="font-semibold text-navy-900">{{ $project->title }}</span>
+                                @include('portal.partials.unread', ['count' => (int) ($unread[$project->getKey()] ?? 0)])
                                 <span class="block text-sm text-navy-700">{{ $project->property->street }}, {{ $project->property->city }}</span>
                             </span>
                             @if ($project->completed_at)

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Pages;
 
+use App\Jobs\ImportQuickBooksItems;
 use App\Models\User;
 use App\Services\QuickBooks\QuickBooksClient;
 use App\Services\QuickBooks\QuickBooksException;
@@ -73,9 +74,12 @@ class QuickBooksCallback extends Page
             return;
         }
 
+        // Its items, so parts and job lines have something to bill as.
+        ImportQuickBooksItems::dispatch($user);
+
         try {
             $company = QuickBooksClient::for($connection)->refreshCompanyDetails()->company_name;
-            $this->finish(Notification::make()->success()->title("Connected to {$company}"));
+            $this->finish(Notification::make()->success()->title("Connected to {$company}")->body('Its items are importing now.'));
         } catch (QuickBooksException $exception) {
             $this->finish(Notification::make()->warning()->title('Connected, but the company’s details didn’t load')->body($exception->getMessage().' Try Check the connection.')->persistent());
         }

@@ -3,6 +3,7 @@
 namespace App\Filament\Resources\Projects\RelationManagers;
 
 use App\Enums\OrderStatus;
+use App\Models\CatalogItem;
 use App\Models\Part;
 use App\Models\Project;
 use App\Models\ProjectLineItem;
@@ -71,9 +72,17 @@ class LineItemsRelationManager extends RelationManager
                     ->required(),
                 Toggle::make('is_taxable')
                     ->label('Taxable')
-                    ->helperText('Parts usually are. QuickBooks works out the tax.')
+                    ->helperText('Set from the QuickBooks item. QuickBooks works out the tax.')
                     ->default(true)
                     ->inline(false),
+                Select::make('catalog_item_id')
+                    ->label('Bills in QuickBooks as')
+                    ->options(fn (): array => CatalogItem::billableOptions())
+                    ->searchable()
+                    ->helperText('Every line needs one before an estimate goes to QuickBooks. A part fills in its own.')
+                    ->live()
+                    ->afterStateUpdated(fn (Set $set, ?string $state) => self::fillFromCatalogItem($set, $state))
+                    ->columnSpanFull(),
                 Section::make('Ordering')
                     ->description('For parts bought for this job. Stocked parts come off the shelf when the job is completed.')
                     ->columns(3)
@@ -113,18 +122,37 @@ class LineItemsRelationManager extends RelationManager
         $set('description', $part->name);
         $set('unit_price', $part->price);
         $set('supplier_id', $part->supplier_id);
+
+        if ($part->catalog_item_id !== null) {
+            $set('catalog_item_id', $part->catalog_item_id);
+            self::fillFromCatalogItem($set, (string) $part->catalog_item_id);
+        }
+    }
+
+    /**
+     * Whether the line is taxable starts as the QuickBooks item's setting; the owner can change it.
+     */
+    private static function fillFromCatalogItem(Set $set, ?string $catalogItemId): void
+    {
+        $item = filled($catalogItemId) ? CatalogItem::query()->find($catalogItemId) : null;
+
+        if ($item !== null) {
+            $set('is_taxable', $item->is_taxable);
+        }
     }
 
     public function table(Table $table): Table
     {
         return $table
             ->recordTitleAttribute('description')
+            ->modifyQueryUsing(fn ($query) => $query->with('catalogItem'))
             ->reorderable('sort_order')
             ->paginated(false)
             ->description(fn (): string => 'Subtotal '.Usd::format($this->ownerRecord->subtotal()).' before tax. QuickBooks adds the tax when the estimate goes out.')
             ->columns([
                 TextColumn::make('description')
-                    ->wrap(),
+                    ->wrap()
+                    ->description(fn (ProjectLineItem $record): string => $record->catalogItem->fully_qualified_name ?? 'No QuickBooks item yet'),
                 TextColumn::make('quantity')
                     ->label('Qty')
                     ->formatStateUsing(fn (string $state): string => (string) BigDecimal::of($state)->strippedOfTrailingZeros()),

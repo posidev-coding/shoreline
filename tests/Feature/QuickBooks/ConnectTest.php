@@ -35,6 +35,8 @@ function fakeIntuitConnection(string $realm = '9130350000000001'): void
             'SalesFormsPrefs' => ['CustomTxnNumbers' => false],
             'TaxPrefs' => ['PartnerTaxEnabled' => true],
         ]]),
+        // The item import that follows a connection.
+        "sandbox-quickbooks.api.intuit.com/v3/company/{$realm}/query*" => Http::response(['QueryResponse' => []]),
     ]);
 }
 

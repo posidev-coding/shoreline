@@ -26,12 +26,22 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  */
 #[Fillable([
     'project_id', 'part_id', 'sort_order', 'description', 'quantity', 'unit_price', 'is_taxable',
-    'order_status', 'supplier_id', 'expected_on',
+    'order_status', 'supplier_id', 'expected_on', 'catalog_item_id',
 ])]
 class ProjectLineItem extends Model
 {
     /** @use HasFactory<ProjectLineItemFactory> */
     use BelongsToProject, HasFactory;
+
+    /**
+     * The QuickBooks item the line bills as.
+     *
+     * @return BelongsTo<CatalogItem, $this>
+     */
+    public function catalogItem(): BelongsTo
+    {
+        return $this->belongsTo(CatalogItem::class);
+    }
 
     /**
      * @return BelongsTo<Part, $this>

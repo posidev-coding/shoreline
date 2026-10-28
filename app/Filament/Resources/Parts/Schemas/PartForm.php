@@ -4,6 +4,7 @@ namespace App\Filament\Resources\Parts\Schemas;
 
 use App\Enums\PartCategory;
 use App\Enums\PartUnit;
+use App\Models\CatalogItem;
 use App\Support\PartSpecs;
 use Filament\Forms\Components\KeyValue;
 use Filament\Forms\Components\Select;
@@ -84,6 +85,12 @@ class PartForm
                             ->minValue(0)
                             ->prefix('$')
                             ->step(0.0001),
+                        Select::make('catalog_item_id')
+                            ->label('Bills in QuickBooks as')
+                            ->options(fn (): array => CatalogItem::billableOptions())
+                            ->searchable()
+                            ->helperText('The QuickBooks item a job line for this part bills as. Its tax setting is the line’s default.')
+                            ->columnSpan(2),
                     ]),
                 Section::make('Stock')
                     ->columns(3)

@@ -35,9 +35,14 @@
         <!-- Turnstile is off unless a test turns it on (and fakes it). -->
         <env name="TURNSTILE_SITE_KEY" value="" force="true"/>
         <env name="TURNSTILE_SECRET_KEY" value="" force="true"/>
+        <!-- Fake Intuit keys. A cloud session can hold real ones as environment variables, which
+             Laravel reads from $_SERVER ahead of <env>, so these are forced there too. -->
         <env name="QUICKBOOKS_CLIENT_ID" value="test-client-id" force="true"/>
         <env name="QUICKBOOKS_CLIENT_SECRET" value="test-client-secret" force="true"/>
         <env name="QUICKBOOKS_ENVIRONMENT" value="sandbox" force="true"/>
+        <server name="QUICKBOOKS_CLIENT_ID" value="test-client-id" force="true"/>
+        <server name="QUICKBOOKS_CLIENT_SECRET" value="test-client-secret" force="true"/>
+        <server name="QUICKBOOKS_ENVIRONMENT" value="sandbox" force="true"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

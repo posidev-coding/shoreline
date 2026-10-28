@@ -26,7 +26,7 @@ use Spatie\MediaLibrary\InteractsWithMedia;
  */
 #[Fillable([
     'category', 'name', 'manufacturer', 'model', 'sku', 'specs', 'supplier_id', 'unit', 'cost', 'price',
-    'warranty_months', 'is_active', 'track_stock', 'reorder_point',
+    'warranty_months', 'is_active', 'track_stock', 'reorder_point', 'catalog_item_id',
 ])]
 class Part extends Model implements HasMedia
 {
@@ -46,6 +46,16 @@ class Part extends Model implements HasMedia
         'track_stock' => false,
         'on_hand' => '0.00',
     ];
+
+    /**
+     * The QuickBooks item the part bills as.
+     *
+     * @return BelongsTo<CatalogItem, $this>
+     */
+    public function catalogItem(): BelongsTo
+    {
+        return $this->belongsTo(CatalogItem::class);
+    }
 
     /**
      * @return BelongsTo<Supplier, $this>

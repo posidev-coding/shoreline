@@ -87,7 +87,9 @@ QUICKBOOKS_CLIENT_ID=<the keys' client ID>
 QUICKBOOKS_ENVIRONMENT=sandbox
 ```
 
-Put `QUICKBOOKS_CLIENT_SECRET` in the Secrets Manager, and redeploy. Then a super admin opens **Settings → QuickBooks** in `/admin` and connects. The page shows the exact redirect URI the app sends, which must match the one in the Intuit app.
+Put `QUICKBOOKS_CLIENT_SECRET` in the Secrets Manager, and redeploy. Then a super admin opens **Settings → QuickBooks** in `/admin` and connects. The page shows the exact redirect URI the app sends, which must match the one in the Intuit app. Development keys connect only to a sandbox company owned by the same Intuit developer account (**My Hub → Sandboxes** on developer.intuit.com); signing in as anyone else ends with Intuit's "There is no sandbox companies found for the user".
+
+On a sandbox connection, run `php artisan app:quickbooks-sandbox-test` from the Commands tab to answer PLAN.md's open QuickBooks questions.
 
 Don't set `DB_*`, `AWS_*`, `FILESYSTEM_DISK`, or `QUEUE_CONNECTION` by hand: custom variables override the injected ones.
 

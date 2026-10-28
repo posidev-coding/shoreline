@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Enums\CatalogItemType;
 use App\Enums\ClientUserRole;
 use App\Enums\ContactMethod;
 use App\Enums\EquipmentType;
@@ -15,6 +16,7 @@ use App\Enums\ReviewSource;
 use App\Enums\Urgency;
 use App\Enums\VisitStatus;
 use App\Enums\VisitType;
+use App\Models\CatalogItem;
 use App\Models\Client;
 use App\Models\Lead;
 use App\Models\Part;
@@ -168,7 +170,8 @@ class DemoSeeder extends Seeder
             'stage' => ProjectStage::Scheduled,
             'description' => 'Demo project: one broken spring on a 16 x 7 door. Replace both and new cables.',
         ]);
-        $parts = $this->parts();
+        $catalog = $this->catalogItems();
+        $parts = $this->parts($catalog);
         $lines = [
             [$parts['left'], 'Torsion spring 0.243 x 2 x 32, left wind', '1', '89.0000'],
             [$parts['right'], 'Torsion spring 0.243 x 2 x 32, right wind', '1', '89.0000'],
@@ -176,7 +179,7 @@ class DemoSeeder extends Seeder
             [null, 'Labor', '1.5', '95.0000'],
         ];
         foreach ($lines as $index => [$part, $description, $quantity, $rate]) {
-            $springJob->lineItems()->create(['part_id' => $part?->getKey(), 'description' => $description, 'quantity' => $quantity, 'unit_price' => $rate, 'sort_order' => $index, 'is_taxable' => $part !== null]);
+            $springJob->lineItems()->create(['part_id' => $part?->getKey(), 'catalog_item_id' => $part->catalog_item_id ?? $catalog['labor']->getKey(), 'description' => $description, 'quantity' => $quantity, 'unit_price' => $rate, 'sort_order' => $index, 'is_taxable' => $part !== null]);
         }
 
         // What's already on the house: the door and opener he'll find when he gets there.
@@ -246,7 +249,7 @@ class DemoSeeder extends Seeder
 
             if ($index === 0) {
                 // Ordered for the job, so it shows on Parts to order.
-                $job->lineItems()->create(['part_id' => $parts['door']->getKey(), 'description' => $parts['door']->name, 'quantity' => '1', 'unit_price' => '2290', 'order_status' => OrderStatus::ToOrder, 'supplier_id' => $parts['door']->supplier_id]);
+                $job->lineItems()->create(['part_id' => $parts['door']->getKey(), 'catalog_item_id' => $parts['door']->catalog_item_id, 'description' => $parts['door']->name, 'quantity' => '1', 'unit_price' => '2290', 'order_status' => OrderStatus::ToOrder, 'supplier_id' => $parts['door']->supplier_id]);
 
                 // Measured last week; the install waits on a changeover day and the door.
                 $measured = now(config('app.business_timezone'))->subWeek()->setTime(10, 0);
@@ -258,17 +261,40 @@ class DemoSeeder extends Seeder
     }
 
     /**
+     * QuickBooks items as an import would bring them in, so parts and lines have something to
+     * bill as locally. Real ones come from the connected company.
+     *
+     * @return array<string, CatalogItem>
+     */
+    private function catalogItems(): array
+    {
+        $item = fn (string $id, string $name, CatalogItemType $type, ?string $price, bool $taxable): CatalogItem => CatalogItem::query()->create([
+            'realm_id' => 'demo', 'qb_id' => $id, 'qb_sync_token' => '0', 'qb_payload' => ['Id' => $id, 'Name' => $name, 'Type' => $type->value],
+            'name' => $name, 'fully_qualified_name' => $name, 'type' => $type, 'unit_price' => $price, 'is_taxable' => $taxable,
+            'income_account_name' => 'Demo Sales', 'is_active' => true,
+        ]);
+
+        return [
+            'labor' => $item('1', 'Labor', CatalogItemType::Service, '95', false),
+            'trip' => $item('2', 'Trip charge', CatalogItemType::Service, '75', false),
+            'parts' => $item('3', 'Garage door parts', CatalogItemType::NonInventory, null, true),
+            'doors' => $item('4', 'Garage doors', CatalogItemType::NonInventory, null, true),
+        ];
+    }
+
+    /**
      * Two suppliers and the parts the demo jobs use, with springs counted on the truck.
      *
+     * @param  array<string, CatalogItem>  $catalog
      * @return array<string, Part>
      */
-    private function parts(): array
+    private function parts(array $catalog): array
     {
         $coastal = Supplier::query()->create(['name' => 'Demo Coastal Door Supply', 'rep_name' => 'Demo Rep', 'account_number' => 'DEMO-1001']);
         $openers = Supplier::query()->create(['name' => 'Demo Opener Distributors']);
 
         $spring = fn (string $wind): array => [
-            'category' => PartCategory::TorsionSpring, 'name' => "Torsion spring 0.243 x 2 x 32, {$wind} wind", 'supplier_id' => $coastal->getKey(),
+            'category' => PartCategory::TorsionSpring, 'name' => "Torsion spring 0.243 x 2 x 32, {$wind} wind", 'supplier_id' => $coastal->getKey(), 'catalog_item_id' => $catalog['parts']->getKey(),
             'specs' => ['wire_size' => '0.243', 'inside_diameter' => '2', 'length' => '32', 'wind' => $wind],
             'cost' => '38', 'price' => '89', 'warranty_months' => 36, 'track_stock' => true, 'reorder_point' => '2',
         ];
@@ -276,9 +302,9 @@ class DemoSeeder extends Seeder
         $parts = [
             'left' => Part::query()->create($spring('left')),
             'right' => Part::query()->create($spring('right')),
-            'cables' => Part::query()->create(['category' => PartCategory::Cable, 'name' => 'Lift cables, pair', 'supplier_id' => $coastal->getKey(), 'unit' => PartUnit::Pair, 'cost' => '9', 'price' => '24.50', 'track_stock' => true, 'reorder_point' => '3']),
-            'opener' => Part::query()->create(['category' => PartCategory::Opener, 'name' => 'LiftMaster 87504 wall-mount opener', 'manufacturer' => 'LiftMaster', 'model' => '87504-267', 'supplier_id' => $openers->getKey(), 'specs' => ['drive' => 'jackshaft', 'horsepower' => '1/2', 'works_with' => 'myQ'], 'cost' => '520', 'price' => '849', 'warranty_months' => 60]),
-            'door' => Part::query()->create(['category' => PartCategory::Door, 'name' => 'Clopay Classic 4050, 16 x 7, wind rated', 'manufacturer' => 'Clopay', 'model' => '4050', 'supplier_id' => $coastal->getKey(), 'specs' => ['material' => 'Steel', 'wind_rating' => '130 mph'], 'cost' => '1400', 'price' => '2290', 'warranty_months' => 120]),
+            'cables' => Part::query()->create(['category' => PartCategory::Cable, 'name' => 'Lift cables, pair', 'supplier_id' => $coastal->getKey(), 'unit' => PartUnit::Pair, 'catalog_item_id' => $catalog['parts']->getKey(), 'cost' => '9', 'price' => '24.50', 'track_stock' => true, 'reorder_point' => '3']),
+            'opener' => Part::query()->create(['category' => PartCategory::Opener, 'name' => 'LiftMaster 87504 wall-mount opener', 'manufacturer' => 'LiftMaster', 'model' => '87504-267', 'supplier_id' => $openers->getKey(), 'specs' => ['drive' => 'jackshaft', 'horsepower' => '1/2', 'works_with' => 'myQ'], 'catalog_item_id' => $catalog['parts']->getKey(), 'cost' => '520', 'price' => '849', 'warranty_months' => 60]),
+            'door' => Part::query()->create(['category' => PartCategory::Door, 'name' => 'Clopay Classic 4050, 16 x 7, wind rated', 'manufacturer' => 'Clopay', 'model' => '4050', 'supplier_id' => $coastal->getKey(), 'specs' => ['material' => 'Steel', 'wind_rating' => '130 mph'], 'catalog_item_id' => $catalog['doors']->getKey(), 'cost' => '1400', 'price' => '2290', 'warranty_months' => 120]),
         ];
 
         $stock = app(Stock::class);

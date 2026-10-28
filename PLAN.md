@@ -371,7 +371,7 @@ Conventions:
   - Admins viewing a client's portal can read the thread but can't post from it or mark it read.
   - Decided in M4c: no unsubscribe link. These are transactional emails about the client's own jobs, which CAN-SPAM doesn't require one for; `email_preferences` arrives with review requests and the hurricane-prep email, which do need one. No attachments in messages, and replies by email don't land in the thread.
 
-**M5 QuickBooks inbound** (three PRs, each checked on staging)
+**M5 QuickBooks inbound** (four PRs, each checked on staging)
 - **M5a Connect:**
   - `quickbooks_connections` (one row: reconnecting the same company updates it; another company is refused until this one is forgotten) and `quickbooks_sync_logs` (every call to Intuit with its `intuit_tid`, kept 30 days by the weekly `model:prune`). Both tables need `#[Table]`: Laravel makes `quick_books_…` of the class names.
   - **TokenManager:** connect, refresh, disconnect, as described under "Client and tokens". A refresh skips itself when another process refreshed first (or, after a 401, when the stored token is no longer the rejected one). Token-call logs are written after the transaction, so a failed refresh, which rolls back, keeps its log.
@@ -379,8 +379,15 @@ Conventions:
   - **Settings → QuickBooks** (super admins): Connect, Check the connection, Disconnect (revokes with Intuit; disconnects even if the revoke fails), Forget this company. It shows the company, the tokens' expiries, the exact redirect URI, and four company settings from QuickBooks' Preferences. Intuit's sign-in returns to `/admin/quickbooks/callback`, a panel page (so it has the admin's sign-in and MFA) that checks the OAuth `state` this session sent.
   - **`app:quickbooks-refresh`**, daily: refreshes even a fresh token, so the refresh token never lapses and each rotated one is saved, reloads the company's details, and reminds super admins 60, 30, 14, 7, 3, and 1 days before the five-year limit. `invalid_grant` disconnects and tells them.
   - Decided in M5a: the sandbox test needs a connected company, so it runs from staging's Commands tab after Connect works there, as a command in M5b. A cloud session can call the sandbox but can't receive Intuit's redirect.
-- **M5b Import:** the sandbox test, items into `catalog_items`, then customers with the matching wizard.
-- **M5c Inbound:** estimate, invoice, and payment mirrors (read-only); webhooks, the CDC sweep, and the Sync Issues screen. Staging's HTTP basic auth will refuse Intuit's webhooks, which can't send a password, so this needs a path exempted or another way in. Then submit the Intuit production-key questionnaire.
+- **M5b Sandbox test and items:**
+  - **`app:quickbooks-sandbox-test`** (staging's Commands tab, sandbox companies only) asks the sandbox the "Unverified" questions and prints a table to paste back. It creates two test customers (one with `:` in its DisplayName), an estimate with an NC ShipAddr, and an invoice, then deletes the documents and deactivates the customers (`--keep` leaves them). Each check runs on its own, so one failure doesn't hide the rest.
+  - **`catalog_items`**, pulled from QuickBooks and never pushed: active and inactive items (a plain query returns only active ones), keyed by realm and QuickBooks id, so a re-import only updates. A type QuickBooks adds later is stored as `Other`, with its raw type in `qb_payload`.
+  - **Settings → QuickBooks items** lists them, with Import from QuickBooks (a queued job that reports in the bell). Connecting a company imports them too.
+  - **Parts and job lines** pick the item they bill as ("Bills in QuickBooks as"), from active Service and Non-inventory items. A line's part fills in the part's item, and picking an item sets the line's Taxable from the item's default. M6 requires an item on every line before an estimate goes out.
+  - `BackOffWhenQuickBooksIsBusy` job middleware puts a job back for 60 s on a 429. The per-realm 10-requests-a-second limiter waits for the first jobs that make many calls (M5c's customer pages).
+  - Tests refuse any HTTP request they don't fake (`Http::preventStrayRequests()` in the base TestCase), and `phpunit.xml` forces the fake Intuit keys through `<server>` too: a cloud session with real keys as environment variables otherwise beat `<env>`.
+- **M5c Customers:** import QB customers a page per job, auto-match on email, phone, or name, and the matching wizard for the rest.
+- **M5d Inbound:** estimate, invoice, and payment mirrors (read-only); webhooks, the CDC sweep, and the Sync Issues screen. Staging's HTTP basic auth will refuse Intuit's webhooks, which can't send a password, so this needs a path exempted or another way in. Then submit the Intuit production-key questionnaire.
 - **First spike:** in the sandbox, confirm that `TxnStatus=Accepted` is writable, what `invoiceLink` requires, how AST behaves on estimates, merge-event semantics, and the CustomTxnNumbers behavior.
 
 **M6 QuickBooks outbound + portal money**

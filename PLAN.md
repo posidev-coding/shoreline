@@ -476,16 +476,16 @@ Conventions:
 - In the cloud: no Herd and no `herd share`. Use `php artisan serve`. `gh pr` and `gh issue` are blocked (GraphQL), so use `gh api` or the diff view's Create PR.
 
 ## Unverified: confirm early (QB sandbox spike in M5, Cloud spike in M0)
-**QuickBooks sandbox**
-- Whether Estimate `TxnStatus=Accepted`, `AcceptedBy`, and `AcceptedDate` can be written via a sparse update.
-- What `invoiceLink` requires: `include=invoiceLink` on a GET, BillEmail, Payments enabled, the `AllowOnline*` flags.
-- How AST behaves on Estimates (the docs only cover invoices).
-- Whether a merge event's `intuitentityid` is the surviving record.
-- Whether `Active IN (true,false)` queries work.
-- Whether CustomTxnNumbers produces a blank DocNumber.
-- Whether `:` is allowed in DisplayName.
-- The name of the token response field that reports the refresh token's five-year limit. The app asks for it with `x-include-refresh-token-hard-expires-in: true` and reads `x_refresh_token_hard_expires_in`; the sync log records which fields each token response had, without their values.
-- What the Preferences flags shown on the QuickBooks page mean: `TaxPrefs.PartnerTaxEnabled` for automated sales tax, and `SalesFormsPrefs.AllowOnlineCreditCardPayment` and `AllowOnlineACHPayment` for QB Payments.
+**QuickBooks sandbox** (first run of `app:quickbooks-sandbox-test` on staging, October 2026, against Intuit's default US sandbox company)
+- ~~Whether Estimate `TxnStatus=Accepted`, `AcceptedBy`, and `AcceptedDate` can be written via a sparse update.~~ Verified: all three read back as written. The portal's approval can write back to QuickBooks (M6).
+- ~~What `invoiceLink` requires.~~ Verified that this works: an invoice with `BillEmail` and `AllowOnlineCreditCardPayment` / `AllowOnlineACHPayment` set, read with `include=invoiceLink`, returns a link (on `developer.intuit.com` in the sandbox). Not tested: whether it still works without them. M6 builds invoices this way. The sandbox's Preferences didn't report the `AllowOnline*` flags at all, and `ETransactionEnabledStatus` was `NotApplicable`, so those can't be used to tell whether QB Payments is on.
+- **How AST behaves on Estimates: still open.** An estimate with a taxable line (`TaxCodeRef TAX`) and an NC `ShipAddr` came back with no tax: `TotalTax 0`, no `TxnTaxCodeRef`. That's not evidence against AST on estimates. The sandbox company is Intuit's default, which has no NC tax agency set up, and Preferences reported `UsingSalesTax: true` but no `PartnerTaxEnabled`. To settle it: in the sandbox, set up sales tax with the NC Department of Revenue as an agency, then run the command again.
+- Whether a merge event's `intuitentityid` is the surviving record. Not testable by API; merge two customers in the sandbox once webhooks exist (M5d).
+- **Whether `Active IN (true,false)` queries work: inconclusive.** The query ran (29 matched), but the company had no inactive customers, so it couldn't show whether inactive ones are included. The run itself left one deactivated test customer, so running it again settles it. The item import doesn't depend on it: it asks for active and inactive items separately.
+- **Whether CustomTxnNumbers produces a blank DocNumber: half answered.** With it off (the sandbox's default), QuickBooks assigned DocNumbers to both the estimate and the invoice. With it on, still unknown: turn on custom transaction numbers in the sandbox's sales settings and run the command again. The plan already supplies a DocNumber when it's on.
+- ~~Whether `:` is allowed in DisplayName.~~ Verified that it isn't: QuickBooks refused the customer with "Invalid String … Element contains invalid characters" (`:` is its separator for sub-customers). The customer sync (M6) must replace `:` in a client's display name before sending it.
+- ~~The name of the token response field that reports the refresh token's five-year limit.~~ Verified: `x_refresh_token_hard_expires_in`, alongside `x_refresh_token_expires_in`, when the request sends `x-include-refresh-token-hard-expires-in: true`. The QuickBooks page shows the date.
+- What the Preferences flags shown on the QuickBooks page mean. `SalesFormsPrefs.CustomTxnNumbers` and `TaxPrefs.UsingSalesTax` are reported. `TaxPrefs.PartnerTaxEnabled` and the `AllowOnline*` flags weren't, so the page shows "Not reported" for those until a company that uses AST and QB Payments says otherwise.
 
 **Laravel Cloud**
 - ~~Whether Cloud's imagick decodes HEIC.~~ Verified on staging in M2: `app:cloud-smoke` decoded a sample HEIC (320×240). M0 had shown only that imagick *lists* HEIC, which proves nothing: a cloud session's imagick listed it too and couldn't decode one until libheif's HEVC plugin (`libheif-plugin-libde265`) was installed. The sample is a simple single-image HEIC, while iPhones save tiled images with depth data, so a real iPhone upload through the quote form is the last check.

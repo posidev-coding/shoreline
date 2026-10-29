@@ -3,6 +3,7 @@
 namespace App\Filament\Pages;
 
 use App\Jobs\ImportQuickBooksCustomers;
+use App\Jobs\ImportQuickBooksDocuments;
 use App\Jobs\ImportQuickBooksItems;
 use App\Models\User;
 use App\Services\QuickBooks\QuickBooksClient;
@@ -75,13 +76,16 @@ class QuickBooksCallback extends Page
             return;
         }
 
-        // Its items, so parts and job lines have something to bill as, and its customers to match to clients.
+        // Its items, so parts and job lines have something to bill as, its customers to match to
+        // clients, and its recent documents. The hourly check for changes starts from now.
+        $connection->update(['changes_synced_at' => now()]);
         ImportQuickBooksItems::dispatch($user);
         ImportQuickBooksCustomers::dispatch($user);
+        ImportQuickBooksDocuments::dispatch($user);
 
         try {
             $company = QuickBooksClient::for($connection)->refreshCompanyDetails()->company_name;
-            $this->finish(Notification::make()->success()->title("Connected to {$company}")->body('Its items and customers are importing now. The bell says when they’re in.'));
+            $this->finish(Notification::make()->success()->title("Connected to {$company}")->body('Its items, customers, estimates, invoices, and payments are importing now. The bell says when they’re in.'));
         } catch (QuickBooksException $exception) {
             $this->finish(Notification::make()->warning()->title('Connected, but the company’s details didn’t load')->body($exception->getMessage().' Try Check the connection.')->persistent());
         }

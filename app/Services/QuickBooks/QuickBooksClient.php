@@ -6,6 +6,7 @@ use App\Models\QuickBooksConnection;
 use App\Models\QuickBooksSyncLog;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\Response;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\LazyCollection;
 
@@ -93,6 +94,32 @@ final class QuickBooksClient
         $rows = (array) ($this->get('query', ['query' => $statement])['QueryResponse'][$entity] ?? []);
 
         return array_values(array_map(fn (mixed $row): array => (array) $row, $rows));
+    }
+
+    /**
+     * Everything of these entities changed since a moment, from QuickBooks' change data capture:
+     * at most 30 days back, and at most 1,000 records a call. A deleted record comes as its Id
+     * with status Deleted. Also returns QuickBooks' own clock at the time of the answer.
+     *
+     * @param  list<string>  $entities
+     * @return array{time: Carbon|null, changes: array<string, list<array<string, mixed>>>}
+     */
+    public function changesSince(array $entities, Carbon $since): array
+    {
+        $response = $this->get('cdc', ['entities' => implode(',', $entities), 'changedSince' => $since->toIso8601String()]);
+        $changes = [];
+
+        foreach ((array) data_get($response, 'CDCResponse.0.QueryResponse', []) as $part) {
+            foreach ($entities as $entity) {
+                foreach ((array) data_get($part, $entity, []) as $record) {
+                    $changes[$entity][] = (array) $record;
+                }
+            }
+        }
+
+        $time = $response['time'] ?? null;
+
+        return ['time' => is_string($time) ? Carbon::parse($time)->utc() : null, 'changes' => $changes];
     }
 
     /**

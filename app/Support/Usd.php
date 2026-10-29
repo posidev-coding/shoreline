@@ -17,6 +17,14 @@ final class Usd
     }
 
     /**
+     * "$1,234.50", from a numeric(12,2) column's string.
+     */
+    public static function amount(string $amount): string
+    {
+        return self::format(Money::of($amount, 'USD'));
+    }
+
+    /**
      * "$12.50", or "$0.4375" for a rate that needs the extra places.
      */
     public static function rate(string $rate): string

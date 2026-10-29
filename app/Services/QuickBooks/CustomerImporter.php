@@ -5,7 +5,6 @@ namespace App\Services\QuickBooks;
 use App\Models\Client;
 use App\Models\QuickBooksConnection;
 use App\Models\QuickBooksCustomer;
-use Illuminate\Support\Carbon;
 use Propaganistas\LaravelPhone\PhoneNumber;
 use Throwable;
 
@@ -32,14 +31,20 @@ final class CustomerImporter
     }
 
     /**
+     * Stores one customer, from an import page, the hourly sweep, or a pull of that customer.
+     *
      * @param  array<string, mixed>  $customer
      */
-    private function store(string $realmId, array $customer): void
+    public function store(string $realmId, array $customer): QuickBooksCustomer
     {
-        $updated = data_get($customer, 'MetaData.LastUpdatedTime');
-        $updatedAt = is_string($updated) ? Carbon::parse($updated)->utc() : null;
+        $updatedAt = QuickBooksRecord::updatedAt($customer);
 
         $row = QuickBooksCustomer::query()->firstOrNew(['realm_id' => $realmId, 'qb_id' => (string) $customer['Id']]);
+
+        if (QuickBooksRecord::isOlderThan($customer, $row->qb_last_updated_at)) {
+            return $row;
+        }
+
         $row->fill([
             'qb_sync_token' => $customer['SyncToken'] ?? null,
             'qb_last_updated_at' => $updatedAt,
@@ -62,6 +67,8 @@ final class CustomerImporter
             ->where('qb_id', $row->qb_id)
             ->toBase()
             ->update(['qb_sync_token' => $row->qb_sync_token, 'qb_last_updated_at' => $updatedAt]);
+
+        return $row;
     }
 
     /**

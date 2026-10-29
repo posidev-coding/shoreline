@@ -1,17 +1,24 @@
 <?php
 
+use App\Enums\SyncIssueKind;
 use App\Filament\Pages\QuickBooks;
 use App\Filament\Resources\Clients\ClientResource;
 use App\Filament\Resources\QuickBooksCustomers\Pages\ManageQuickBooksCustomers;
 use App\Jobs\ImportQuickBooksCustomers;
 use App\Models\CatalogItem;
 use App\Models\Client;
+use App\Models\Estimate;
+use App\Models\Invoice;
 use App\Models\Part;
+use App\Models\Payment;
+use App\Models\PaymentApplication;
 use App\Models\QuickBooksConnection;
 use App\Models\QuickBooksCustomer;
+use App\Models\QuickBooksSyncIssue;
 use App\Models\User;
 use App\Services\QuickBooks\CustomerImporter;
 use App\Services\QuickBooks\CustomerMatcher;
+use App\Services\QuickBooks\SyncIssues;
 use Filament\Actions\Testing\TestAction;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
@@ -341,7 +348,7 @@ describe('review', function () {
     });
 });
 
-it('forgets a company’s customers, items, and links with it', function () {
+it('forgets a company’s customers, items, documents, and links with it', function () {
     $this->actingAs(User::factory()->superAdmin()->withMfa()->create());
     $this->connection->update(['disconnected_at' => now(), 'refresh_token' => null]);
     QuickBooksCustomer::factory()->count(2)->create();
@@ -349,6 +356,10 @@ it('forgets a company’s customers, items, and links with it', function () {
     $client->forceFill(['realm_id' => '9130350000000001', 'qb_id' => '1', 'qb_linked_at' => now()])->save();
     $item = CatalogItem::factory()->create(['realm_id' => '9130350000000001']);
     $part = Part::factory()->create(['catalog_item_id' => $item->getKey()]);
+    Estimate::factory()->create();
+    Invoice::factory()->create()->delete();
+    Payment::factory()->create()->applications()->create(['txn_type' => 'Invoice', 'txn_qb_id' => '1', 'amount' => '10.00']);
+    SyncIssues::raise(SyncIssueKind::SweepFailed, 'Broken');
 
     Livewire::test(QuickBooks::class)->callAction(TestAction::make('forget'));
 
@@ -357,6 +368,9 @@ it('forgets a company’s customers, items, and links with it', function () {
         ->and(CatalogItem::query()->exists())->toBeFalse()
         ->and($part->refresh()->catalog_item_id)->toBeNull()
         ->and($client->refresh())->qb_id->toBeNull()->realm_id->toBeNull()
+        ->and(Estimate::withTrashed()->exists() || Invoice::withTrashed()->exists() || Payment::withTrashed()->exists())->toBeFalse()
+        ->and(PaymentApplication::query()->exists())->toBeFalse()
+        ->and(QuickBooksSyncIssue::query()->exists())->toBeFalse()
         ->and(Activity::query()->where('event', 'quickbooks')->latest('id')->value('description'))
-        ->toBe('Forgot QuickBooks company 9130350000000001: unlinked 1 client, removed 2 customers and 1 item');
+        ->toBe('Forgot QuickBooks company 9130350000000001: unlinked 1 client, removed 2 customers, 1 item and 3 documents');
 });

@@ -34,6 +34,11 @@ function fakeSandbox(array $failing = []): void
             $path === 'customer' => ['Customer' => ['Id' => str_contains($body['DisplayName'], ':') ? '58' : '59', 'DisplayName' => $body['DisplayName'], 'SyncToken' => '0']],
             str_starts_with($path, 'customer/') => ['Customer' => ['Id' => str($path)->after('/')->toString(), 'SyncToken' => '0']],
             str_contains($query, 'operation=delete') => [ucfirst($path) => ['status' => 'Deleted']],
+            str_contains($query, 'operation=void') => ['Invoice' => ['Id' => '200', 'SyncToken' => '1']],
+            $path === 'cdc' => ['time' => '2026-10-29T10:00:00-07:00', 'CDCResponse' => [['QueryResponse' => [
+                ['Customer' => [['Id' => '59', 'SyncToken' => '1']]],
+                ['Invoice' => [['Id' => '200', 'status' => 'Deleted']]],
+            ]]]],
             $path === 'estimate' && isset($body['sparse']) => ['Estimate' => ['Id' => '100', 'SyncToken' => '1', 'TxnStatus' => 'Accepted']],
             $path === 'estimate' => ['Estimate' => [
                 'Id' => '100', 'SyncToken' => '0', 'DocNumber' => '1001', 'TotalAmt' => 106.75,
@@ -41,7 +46,8 @@ function fakeSandbox(array $failing = []): void
             ]],
             $path === 'estimate/100' => ['Estimate' => ['Id' => '100', 'SyncToken' => '1', 'TxnStatus' => 'Accepted', 'AcceptedBy' => 'Shoreline test', 'AcceptedDate' => '2026-10-28']],
             $path === 'invoice' => ['Invoice' => ['Id' => '200', 'SyncToken' => '0']],
-            $path === 'invoice/200' => ['Invoice' => ['Id' => '200', 'SyncToken' => '0', 'InvoiceLink' => 'https://connect.intuit.com/portal/app/CommerceNetwork/view/scs-v1-abc']],
+            $path === 'invoice/200' && str_contains($query, 'invoiceLink') => ['Invoice' => ['Id' => '200', 'SyncToken' => '0', 'InvoiceLink' => 'https://connect.intuit.com/portal/app/CommerceNetwork/view/scs-v1-abc']],
+            $path === 'invoice/200' => ['Invoice' => ['Id' => '200', 'SyncToken' => '1', 'TotalAmt' => 0, 'Balance' => 0, 'PrivateNote' => 'Voided']],
             default => throw new RuntimeException("Unexpected sandbox call: {$request->method()} {$path}?{$query}"),
         });
     });
@@ -60,6 +66,8 @@ it('asks the sandbox each open question, prints the answers, and tidies up', fun
         ->expectsOutputToContain('Assigned: 1001')
         ->expectsOutputToContain('Read back: TxnStatus Accepted, AcceptedBy Shoreline test, AcceptedDate 2026-10-28')
         ->expectsOutputToContain('Present, on connect.intuit.com')
+        ->expectsOutputToContain("Read back: TotalAmt 0, Balance 0, PrivateNote 'Voided'")
+        ->expectsOutputToContain("Server time 2026-10-29T17:00:00+00:00; 1 Customer, 1 Invoice; test invoice listed with status 'Deleted'")
         ->expectsOutputToContain('Not testable by API');
 
     // The documents are deleted and both test customers deactivated.

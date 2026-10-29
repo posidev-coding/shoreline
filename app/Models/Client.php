@@ -84,6 +84,32 @@ class Client extends Model
     }
 
     /**
+     * Its QuickBooks estimates, through the customer it's linked to.
+     *
+     * @return HasMany<Estimate, $this>
+     */
+    public function estimates(): HasMany
+    {
+        return $this->hasMany(Estimate::class, 'client_qb_id', 'qb_id');
+    }
+
+    /**
+     * @return HasMany<Invoice, $this>
+     */
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class, 'client_qb_id', 'qb_id');
+    }
+
+    /**
+     * @return HasMany<Payment, $this>
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(Payment::class, 'client_qb_id', 'qb_id');
+    }
+
+    /**
      * @return HasMany<Project, $this>
      */
     public function openProjects(): HasMany

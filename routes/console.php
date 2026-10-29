@@ -1,5 +1,6 @@
 <?php
 
+use App\Jobs\SweepQuickBooksChanges;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -19,3 +20,7 @@ Schedule::command('app:quickbooks-refresh')->daily();
 
 // Weekly. Prunes models that say how (QuickBooks sync logs after 30 days).
 Schedule::command('model:prune')->weekly();
+
+// Hourly, the most the environment allows while still sleeping. Brings in what changed in
+// QuickBooks since the last check.
+Schedule::job(new SweepQuickBooksChanges)->hourly();

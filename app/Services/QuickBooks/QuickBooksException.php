@@ -64,6 +64,14 @@ final class QuickBooksException extends RuntimeException
     }
 
     /**
+     * Intuit's 610, Object Not Found: the record was deleted (or merged away) in QuickBooks.
+     */
+    public function isNotFound(): bool
+    {
+        return $this->intuitCode === '610';
+    }
+
+    /**
      * Too many requests: the job should wait and try again.
      */
     public function isRateLimited(): bool

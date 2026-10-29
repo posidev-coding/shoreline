@@ -25,6 +25,17 @@ enum QuickBooksEnvironment: string implements HasLabel
         };
     }
 
+    /**
+     * A page in QuickBooks Online itself, for "Open in QuickBooks" links.
+     */
+    public function appUrl(string $path): string
+    {
+        return match ($this) {
+            self::Sandbox => 'https://app.sandbox.qbo.intuit.com/app/',
+            self::Production => 'https://app.qbo.intuit.com/app/',
+        }.ltrim($path, '/');
+    }
+
     public function getLabel(): string
     {
         return match ($this) {

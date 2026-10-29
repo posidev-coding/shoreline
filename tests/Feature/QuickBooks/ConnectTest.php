@@ -35,7 +35,7 @@ function fakeIntuitConnection(string $realm = '9130350000000001'): void
             'SalesFormsPrefs' => ['CustomTxnNumbers' => false],
             'TaxPrefs' => ['PartnerTaxEnabled' => true],
         ]]),
-        // The item import that follows a connection.
+        // The item and customer imports that follow a connection.
         "sandbox-quickbooks.api.intuit.com/v3/company/{$realm}/query*" => Http::response(['QueryResponse' => []]),
     ]);
 }
@@ -92,6 +92,10 @@ it('connects on the way back: trades the code for tokens, stores them encrypted,
         ->and(DB::table('quickbooks_connections')->value('refresh_token'))->not->toContain('refresh-1')
         ->and(QuickBooksSyncLog::query()->where('intuit_tid', 'tid-token')->value('detail'))->toBe('Fields: access_token, refresh_token, token_type, expires_in, x_refresh_token_expires_in')
         ->and(Activity::query()->where('event', 'quickbooks')->value('description'))->toBe('Connected QuickBooks (Sandbox) company 9130350000000001');
+
+    // Then its items and customers come in.
+    Http::assertSent(fn (Request $request): bool => str_contains(urldecode($request->url()), 'select * from Item'));
+    Http::assertSent(fn (Request $request): bool => str_contains(urldecode($request->url()), 'select * from Customer'));
 });
 
 it('refuses a callback whose state this session didn’t send, without spending the code', function (?string $state) {

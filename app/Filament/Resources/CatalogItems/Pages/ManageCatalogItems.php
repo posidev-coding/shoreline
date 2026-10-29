@@ -15,6 +15,8 @@ class ManageCatalogItems extends ManageRecords
 {
     protected static string $resource = CatalogItemResource::class;
 
+    protected static ?string $title = 'QuickBooks items';
+
     protected function getHeaderActions(): array
     {
         return [

@@ -21,12 +21,14 @@ use App\Models\Client;
 use App\Models\Lead;
 use App\Models\Part;
 use App\Models\Project;
+use App\Models\QuickBooksCustomer;
 use App\Models\Service;
 use App\Models\ServiceArea;
 use App\Models\Showcase;
 use App\Models\Supplier;
 use App\Models\Testimonial;
 use App\Models\User;
+use App\Services\QuickBooks\CustomerLinker;
 use App\Support\MessageThread;
 use App\Support\Stock;
 use Illuminate\Database\Seeder;
@@ -258,6 +260,29 @@ class DemoSeeder extends Seeder
                 $job->visits()->create(['type' => VisitType::Install, 'starts_at' => $install->clone()->utc(), 'ends_at' => $install->clone()->addHours(4)->utc(), 'notes' => 'Changeover day: done by 4 PM.']);
             }
         }
+
+        $this->quickBooksCustomers($homeowner);
+    }
+
+    /**
+     * QuickBooks customers as an import would leave them: one linked to the demo homeowner, one
+     * for review whose email matches the rentals client but whose phone doesn't, its
+     * sub-customer, and an inactive one with no match.
+     */
+    private function quickBooksCustomers(Client $homeowner): void
+    {
+        $customer = fn (string $id, string $name, array $attributes = []): QuickBooksCustomer => QuickBooksCustomer::query()->create([
+            'realm_id' => 'demo', 'qb_id' => $id, 'qb_sync_token' => '0', 'qb_payload' => ['Id' => $id, 'DisplayName' => $name],
+            'display_name' => $name, 'is_active' => true, ...$attributes,
+        ]);
+
+        app(CustomerLinker::class)->link(
+            $customer('101', 'Demo Homeowner', ['given_name' => 'Demo', 'family_name' => 'Homeowner', 'email' => 'homeowner@example.com', 'phone' => '+12525550190', 'billing_city' => 'Beaufort']),
+            $homeowner,
+        );
+        $customer('102', 'Demo Beach Rentals LLC', ['company_name' => 'Demo Beach Rentals LLC', 'email' => 'rentals@example.com', 'phone' => '+12525550192', 'billing_city' => 'Emerald Isle']);
+        $customer('103', 'Demo Beach Rentals LLC:8 Demo Ocean Dr', ['parent_qb_id' => '102', 'billing_city' => 'Emerald Isle']);
+        $customer('104', 'Demo Former Customer', ['email' => 'former@example.com', 'is_active' => false]);
     }
 
     /**

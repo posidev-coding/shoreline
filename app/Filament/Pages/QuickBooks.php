@@ -3,7 +3,10 @@
 namespace App\Filament\Pages;
 
 use App\Enums\UserRole;
+use App\Models\CatalogItem;
+use App\Models\Client;
 use App\Models\QuickBooksConnection;
+use App\Models\QuickBooksCustomer;
 use App\Models\User;
 use App\Services\QuickBooks\QuickBooksClient;
 use App\Services\QuickBooks\QuickBooksException;
@@ -17,6 +20,7 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use UnitEnum;
 
@@ -155,12 +159,25 @@ class QuickBooks extends Page
                 ->color('danger')
                 ->visible($connection !== null && ! $isConnected)
                 ->requiresConfirmation()
-                ->modalDescription('So that a different QuickBooks company can be connected. Nothing in QuickBooks changes.')
+                ->modalDescription('So that a different QuickBooks company can be connected. Its customers and items leave the app: clients are unlinked from them, and parts and job lines lose the item they bill as. Nothing in QuickBooks changes. To use this same company again, Connect again instead, which keeps all of that.')
                 ->action(function (): void {
                     $connection = $this->connection();
-                    activity()->causedBy($this->user())->event('quickbooks')
-                        ->log("Forgot QuickBooks company {$connection->realm_id}");
-                    $connection->delete();
+                    $realm = $connection->realm_id;
+
+                    DB::transaction(function () use ($connection, $realm): void {
+                        $clients = Client::withTrashed()->where('realm_id', $realm)->toBase()->update([
+                            'realm_id' => null, 'qb_id' => null, 'qb_sync_token' => null, 'qb_last_updated_at' => null, 'qb_linked_at' => null,
+                        ]);
+                        $customers = QuickBooksCustomer::query()->where('realm_id', $realm)->delete();
+                        // Parts and job lines let go of the items by foreign key.
+                        $items = CatalogItem::query()->where('realm_id', $realm)->delete();
+
+                        activity()->causedBy($this->user())->event('quickbooks')
+                            ->log("Forgot QuickBooks company {$realm}: unlinked {$clients} ".str('client')->plural($clients)
+                                .", removed {$customers} ".str('customer')->plural($customers)." and {$items} ".str('item')->plural($items));
+                        $connection->delete();
+                    });
+
                     Notification::make()->success()->title('Forgotten. Another company can be connected now.')->send();
                 }),
         ];

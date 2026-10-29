@@ -71,16 +71,28 @@ final class QuickBooksClient
             $start = 1;
 
             do {
-                $statement = trim("select * from {$entity} {$where}")." startposition {$start} maxresults {$pageSize}";
-                $rows = (array) ($this->get('query', ['query' => $statement])['QueryResponse'][$entity] ?? []);
+                $rows = $this->queryPage($entity, $where, $start, $pageSize);
 
                 foreach ($rows as $row) {
-                    yield (array) $row;
+                    yield $row;
                 }
 
                 $start += $pageSize;
             } while (count($rows) === $pageSize);
         });
+    }
+
+    /**
+     * One page of a query, for a job that takes a page at a time. Positions start at 1.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function queryPage(string $entity, string $where, int $start, int $pageSize): array
+    {
+        $statement = trim("select * from {$entity} {$where}")." startposition {$start} maxresults {$pageSize}";
+        $rows = (array) ($this->get('query', ['query' => $statement])['QueryResponse'][$entity] ?? []);
+
+        return array_values(array_map(fn (mixed $row): array => (array) $row, $rows));
     }
 
     /**

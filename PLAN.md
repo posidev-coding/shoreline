@@ -384,9 +384,16 @@ Conventions:
   - **`catalog_items`**, pulled from QuickBooks and never pushed: active and inactive items (a plain query returns only active ones), keyed by realm and QuickBooks id, so a re-import only updates. A type QuickBooks adds later is stored as `Other`, with its raw type in `qb_payload`.
   - **Settings → QuickBooks items** lists them, with Import from QuickBooks (a queued job that reports in the bell). Connecting a company imports them too.
   - **Parts and job lines** pick the item they bill as ("Bills in QuickBooks as"), from active Service and Non-inventory items. A line's part fills in the part's item, and picking an item sets the line's Taxable from the item's default. M6 requires an item on every line before an estimate goes out.
-  - `BackOffWhenQuickBooksIsBusy` job middleware puts a job back for 60 s on a 429. The per-realm 10-requests-a-second limiter waits for the first jobs that make many calls (M5c's customer pages).
+  - `BackOffWhenQuickBooksIsBusy` job middleware puts a job back for 60 s on a 429. The per-realm 10-requests-a-second limiter waits for the first jobs that make many calls (not M5c: each customer page is one request).
   - Tests refuse any HTTP request they don't fake (`Http::preventStrayRequests()` in the base TestCase), and `phpunit.xml` forces the fake Intuit keys through `<server>` too: a cloud session with real keys as environment variables otherwise beat `<env>`.
-- **M5c Customers:** import QB customers a page per job, auto-match on email, phone, or name, and the matching wizard for the rest.
+- **M5c Customers:**
+  - **`quickbooks_customers`**: every customer as last imported (active and inactive, sub-customers and QBO projects too), keyed by realm and QuickBooks id, with the email lowercased and the phone in E.164 as clients store them, plus the raw payload.
+  - **The link** is the client's own `realm_id` and `qb_id`, with `qb_sync_token`, `qb_last_updated_at`, and `qb_linked_at`. They aren't fillable: only `CustomerLinker` sets them, and it writes the client's history entry itself. The two-way sync columns (`last_synced_hash` and the like) wait for M6.
+  - **Import:** `ImportQuickBooksCustomers` takes 500 customers per job and dispatches the next page, then the inactive ones, then matches and reports in the bell. Connecting a company imports its customers along with its items.
+  - **Automatic match** (`CustomerMatcher`): a customer's candidates are the unlinked clients with its email, phone, or display name. It links only when there's exactly one, no email or phone on the two sides disagrees, and no other customer wants that client. So a matching email with a different phone goes to review: a wrong link would let QuickBooks overwrite the wrong client in M6, and review costs one click.
+  - **Settings → QuickBooks customers** (any admin): tabs To review, Linked, Skipped, Sub-customers and projects, All. Link (the candidates first, the only one preselected), Create client (name, company, email, phone, and billing address; refused when a client has the name, trashed ones included), Skip, Review again, Unlink; bulk Create clients and Skip; Match automatically and Import from QuickBooks. Linking changes neither side; M6's ownership rules decide what wins after. A client's page shows its QuickBooks customer.
+  - **Sub-customers and QBO projects** are listed but not linked: they belong to properties and `qb_mode`, in M6.
+  - **Forget this company** also unlinks its clients and deletes its customers and items (parts and job lines let go of the items by foreign key). Connect again keeps all of that.
 - **M5d Inbound:** estimate, invoice, and payment mirrors (read-only); webhooks, the CDC sweep, and the Sync Issues screen. Staging's HTTP basic auth will refuse Intuit's webhooks, which can't send a password, so this needs a path exempted or another way in. Then submit the Intuit production-key questionnaire.
 - **First spike:** in the sandbox, confirm that `TxnStatus=Accepted` is writable, what `invoiceLink` requires, how AST behaves on estimates, merge-event semantics, and the CustomTxnNumbers behavior.
 
@@ -476,16 +483,16 @@ Conventions:
 - In the cloud: no Herd and no `herd share`. Use `php artisan serve`. `gh pr` and `gh issue` are blocked (GraphQL), so use `gh api` or the diff view's Create PR.
 
 ## Unverified: confirm early (QB sandbox spike in M5, Cloud spike in M0)
-**QuickBooks sandbox**
-- Whether Estimate `TxnStatus=Accepted`, `AcceptedBy`, and `AcceptedDate` can be written via a sparse update.
-- What `invoiceLink` requires: `include=invoiceLink` on a GET, BillEmail, Payments enabled, the `AllowOnline*` flags.
-- How AST behaves on Estimates (the docs only cover invoices).
-- Whether a merge event's `intuitentityid` is the surviving record.
-- Whether `Active IN (true,false)` queries work.
-- Whether CustomTxnNumbers produces a blank DocNumber.
-- Whether `:` is allowed in DisplayName.
-- The name of the token response field that reports the refresh token's five-year limit. The app asks for it with `x-include-refresh-token-hard-expires-in: true` and reads `x_refresh_token_hard_expires_in`; the sync log records which fields each token response had, without their values.
-- What the Preferences flags shown on the QuickBooks page mean: `TaxPrefs.PartnerTaxEnabled` for automated sales tax, and `SalesFormsPrefs.AllowOnlineCreditCardPayment` and `AllowOnlineACHPayment` for QB Payments.
+**QuickBooks sandbox** (first run of `app:quickbooks-sandbox-test` on staging, October 2026, against Intuit's default US sandbox company)
+- ~~Whether Estimate `TxnStatus=Accepted`, `AcceptedBy`, and `AcceptedDate` can be written via a sparse update.~~ Verified: all three read back as written. The portal's approval can write back to QuickBooks (M6).
+- ~~What `invoiceLink` requires.~~ Verified that this works: an invoice with `BillEmail` and `AllowOnlineCreditCardPayment` / `AllowOnlineACHPayment` set, read with `include=invoiceLink`, returns a link (on `developer.intuit.com` in the sandbox). Not tested: whether it still works without them. M6 builds invoices this way. The sandbox's Preferences didn't report the `AllowOnline*` flags at all, and `ETransactionEnabledStatus` was `NotApplicable`, so those can't be used to tell whether QB Payments is on.
+- **How AST behaves on Estimates: still open.** An estimate with a taxable line (`TaxCodeRef TAX`) and an NC `ShipAddr` came back with no tax: `TotalTax 0`, no `TxnTaxCodeRef`. That's not evidence against AST on estimates. The sandbox company is Intuit's default, which has no NC tax agency set up, and Preferences reported `UsingSalesTax: true` but no `PartnerTaxEnabled`. To settle it: in the sandbox, set up sales tax with the NC Department of Revenue as an agency, then run the command again.
+- Whether a merge event's `intuitentityid` is the surviving record. Not testable by API; merge two customers in the sandbox once webhooks exist (M5d).
+- **Whether `Active IN (true,false)` queries work: inconclusive.** The query ran (29 matched), but the company had no inactive customers, so it couldn't show whether inactive ones are included. The run itself left one deactivated test customer, so running it again settles it. The item import doesn't depend on it: it asks for active and inactive items separately.
+- **Whether CustomTxnNumbers produces a blank DocNumber: half answered.** With it off (the sandbox's default), QuickBooks assigned DocNumbers to both the estimate and the invoice. With it on, still unknown: turn on custom transaction numbers in the sandbox's sales settings and run the command again. The plan already supplies a DocNumber when it's on.
+- ~~Whether `:` is allowed in DisplayName.~~ Verified that it isn't: QuickBooks refused the customer with "Invalid String … Element contains invalid characters" (`:` is its separator for sub-customers). The customer sync (M6) must replace `:` in a client's display name before sending it.
+- ~~The name of the token response field that reports the refresh token's five-year limit.~~ Verified: `x_refresh_token_hard_expires_in`, alongside `x_refresh_token_expires_in`, when the request sends `x-include-refresh-token-hard-expires-in: true`. The QuickBooks page shows the date.
+- What the Preferences flags shown on the QuickBooks page mean. `SalesFormsPrefs.CustomTxnNumbers` and `TaxPrefs.UsingSalesTax` are reported. `TaxPrefs.PartnerTaxEnabled` and the `AllowOnline*` flags weren't, so the page shows "Not reported" for those until a company that uses AST and QB Payments says otherwise.
 
 **Laravel Cloud**
 - ~~Whether Cloud's imagick decodes HEIC.~~ Verified on staging in M2: `app:cloud-smoke` decoded a sample HEIC (320×240). M0 had shown only that imagick *lists* HEIC, which proves nothing: a cloud session's imagick listed it too and couldn't decode one until libheif's HEVC plugin (`libheif-plugin-libde265`) was installed. The sample is a simple single-image HEIC, while iPhones save tiled images with depth data, so a real iPhone upload through the quote form is the last check.

@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Clients\Schemas;
 
+use App\Filament\Resources\QuickBooksCustomers\QuickBooksCustomerResource;
 use App\Filament\Support\ContactFields;
 use App\Models\Client;
 use Filament\Infolists\Components\TextEntry;
@@ -51,6 +52,14 @@ class ClientInfolist
                         TextEntry::make('created_at')
                             ->label('Client since')
                             ->date(),
+                        TextEntry::make('qb_id')
+                            ->label('QuickBooks')
+                            ->state(fn (Client $record): ?string => $record->qb_id === null ? null : ($record->quickBooksCustomer->display_name ?? "Customer {$record->qb_id}"))
+                            ->helperText(fn (Client $record): ?string => $record->qb_linked_at ? 'Linked '.$record->qb_linked_at->timezone(config('app.business_timezone'))->format('M j, Y') : null)
+                            ->url(fn (Client $record): ?string => $record->quickBooksCustomer
+                                ? QuickBooksCustomerResource::getUrl(parameters: ['tab' => 'linked', 'search' => $record->quickBooksCustomer->display_name])
+                                : null)
+                            ->placeholder('Not linked'),
                     ]),
             ]);
     }

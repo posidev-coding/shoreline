@@ -12,13 +12,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Spatie\Activitylog\Models\Concerns\LogsActivity;
 use Spatie\Activitylog\Support\LogOptions;
 
 /**
  * Who the work is for, and who gets the bill: a homeowner, or a property manager with many
- * properties. Becomes a QuickBooks customer in M6.
+ * properties. Linked to a QuickBooks customer in M5c, and synced with it in M6.
+ *
+ * @property-read QuickBooksCustomer|null $quickBooksCustomer
  */
 #[Fillable([
     'display_name', 'first_name', 'last_name', 'company', 'email', 'phone',
@@ -67,6 +70,17 @@ class Client extends Model
             ->as('access')
             ->withPivot(['id', 'client_role', 'invited_at'])
             ->withTimestamps();
+    }
+
+    /**
+     * The QuickBooks customer it's linked to, as last imported. The link itself is qb_id, set
+     * only through App\Services\QuickBooks\CustomerLinker.
+     *
+     * @return HasOne<QuickBooksCustomer, $this>
+     */
+    public function quickBooksCustomer(): HasOne
+    {
+        return $this->hasOne(QuickBooksCustomer::class, 'qb_id', 'qb_id');
     }
 
     /**
@@ -130,6 +144,8 @@ class Client extends Model
     {
         return [
             'is_property_manager' => 'boolean',
+            'qb_last_updated_at' => 'datetime',
+            'qb_linked_at' => 'datetime',
         ];
     }
 }

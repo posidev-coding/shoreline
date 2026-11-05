@@ -42,14 +42,17 @@ final class CustomerLinker
             ->log(($by === null ? 'Matched automatically to' : 'Linked to')." QuickBooks customer {$customer->display_name} ({$customer->qb_id})");
     }
 
-    public function unlink(Client $client, User $by): void
+    /**
+     * Unlinks the client: by someone, or, without one, because of what happened in QuickBooks.
+     */
+    public function unlink(Client $client, ?User $by, ?string $because = null): void
     {
         $qbId = $client->qb_id;
 
         $client->forceFill(['realm_id' => null, 'qb_id' => null, 'qb_sync_token' => null, 'qb_last_updated_at' => null, 'qb_linked_at' => null])->save();
 
         activity()->performedOn($client)->causedBy($by)->event('quickbooks')
-            ->log("Unlinked from QuickBooks customer {$qbId}");
+            ->log("Unlinked from QuickBooks customer {$qbId}".($because === null ? '' : ": {$because}"));
     }
 
     /**

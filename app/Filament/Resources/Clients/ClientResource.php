@@ -7,6 +7,8 @@ use App\Filament\Resources\Clients\Pages\CreateClient;
 use App\Filament\Resources\Clients\Pages\EditClient;
 use App\Filament\Resources\Clients\Pages\ListClients;
 use App\Filament\Resources\Clients\Pages\ViewClient;
+use App\Filament\Resources\Clients\RelationManagers\EstimatesRelationManager;
+use App\Filament\Resources\Clients\RelationManagers\InvoicesRelationManager;
 use App\Filament\Resources\Clients\RelationManagers\PortalUsersRelationManager;
 use App\Filament\Resources\Clients\RelationManagers\ProjectsRelationManager;
 use App\Filament\Resources\Clients\RelationManagers\PropertiesRelationManager;
@@ -58,6 +60,8 @@ class ClientResource extends Resource
             ProjectsRelationManager::class,
             PropertiesRelationManager::class,
             PortalUsersRelationManager::class,
+            EstimatesRelationManager::class,
+            InvoicesRelationManager::class,
         ];
     }
 

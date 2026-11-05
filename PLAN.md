@@ -112,9 +112,9 @@ Conventions:
 - Every mirrored row carries `realm_id`, `qb_id` (unique on realm + id), `qb_sync_token`, `qb_last_updated_at`, `qb_payload` (jsonb).
 - Two-way entities also carry `last_synced_hash` and `sync_state` (`clean | dirty | pending | conflict | error`).
 - **catalog_items**: QB Items with type, parent, default taxable, IncomeAccountRef, active. Includes generic items (Labor, Materials, Trip charge, Haul-away). Pull-only in v1.
-- **estimates** + **estimate_lines**: a snapshot of what was pushed, mirrored back from QB.
+- **estimates** + **estimate_lines**: a snapshot of what was pushed, mirrored back from QB. M5d mirrors estimates with their lines in `qb_payload`; M6 adds `estimate_lines` when it pushes them and needs the diff.
 - **estimate_approvals**: user, typed name, IP, user agent, timestamp, SyncToken, total, terms version.
-- **invoices**: balance, due date, void flag, `is_deposit`. **payments** + **payment_applications** (payment ↔ invoice amounts).
+- **invoices**: balance, due date, void flag, `is_deposit` (M6). **payments** + **payment_applications** (payment ↔ invoice amounts).
 - **quickbooks_connections**:
   - environment, realm, company name
   - encrypted tokens, `access_expires_at` / `refresh_expires_at` / `refresh_hard_expires_at`
@@ -270,7 +270,7 @@ Conventions:
 - Hard-deleted documents (error 610 or CDC `Deleted`) are soft-deleted locally, and the owner is alerted if they belonged to a project.
 - **Hourly CDC sweep:**
   - Cursor is the server time minus an overlap window; the lookback is ≤ 30 days.
-  - If a response hits the 1,000-object cap, shrink the window and re-run.
+  - If a response hits the 1,000-object cap, raise a sync issue telling a super admin to run the imports again. (CDC takes only `changedSince`, with no end time, so the window can't be shrunk; for this business 1,000 changes in an hour won't happen.)
   - This is the safety net for scale-to-zero cold starts that miss Intuit's ~3 s webhook window. Intuit also retries on its own backoff.
 
 **Money dashboard**
@@ -371,7 +371,7 @@ Conventions:
   - Admins viewing a client's portal can read the thread but can't post from it or mark it read.
   - Decided in M4c: no unsubscribe link. These are transactional emails about the client's own jobs, which CAN-SPAM doesn't require one for; `email_preferences` arrives with review requests and the hurricane-prep email, which do need one. No attachments in messages, and replies by email don't land in the thread.
 
-**M5 QuickBooks inbound** (four PRs, each checked on staging)
+**M5 QuickBooks inbound** (five PRs, each checked on staging)
 - **M5a Connect:**
   - `quickbooks_connections` (one row: reconnecting the same company updates it; another company is refused until this one is forgotten) and `quickbooks_sync_logs` (every call to Intuit with its `intuit_tid`, kept 30 days by the weekly `model:prune`). Both tables need `#[Table]`: Laravel makes `quick_books_…` of the class names.
   - **TokenManager:** connect, refresh, disconnect, as described under "Client and tokens". A refresh skips itself when another process refreshed first (or, after a 401, when the stored token is no longer the rejected one). Token-call logs are written after the transaction, so a failed refresh, which rolls back, keeps its log.
@@ -394,7 +394,18 @@ Conventions:
   - **Settings → QuickBooks customers** (any admin): tabs To review, Linked, Skipped, Sub-customers and projects, All. Link (the candidates first, the only one preselected), Create client (name, company, email, phone, and billing address; refused when a client has the name, trashed ones included), Skip, Review again, Unlink; bulk Create clients and Skip; Match automatically and Import from QuickBooks. Linking changes neither side; M6's ownership rules decide what wins after. A client's page shows its QuickBooks customer.
   - **Sub-customers and QBO projects** are listed but not linked: they belong to properties and `qb_mode`, in M6.
   - **Forget this company** also unlinks its clients and deletes its customers and items (parts and job lines let go of the items by foreign key). Connect again keeps all of that.
-- **M5d Inbound:** estimate, invoice, and payment mirrors (read-only); webhooks, the CDC sweep, and the Sync Issues screen. Staging's HTTP basic auth will refuse Intuit's webhooks, which can't send a password, so this needs a path exempted or another way in. Then submit the Intuit production-key questionnaire.
+- **M5d Mirrors and the hourly sweep:**
+  - **`estimates`, `invoices`, `payments` + `payment_applications`**, mirrored read-only by `DocumentMirror`, keyed by realm and QuickBooks id, with the raw payload. Deleted in QuickBooks means soft-deleted here, and a deleted payment's applications go with it. An older copy of a record never overwrites a newer one (`MetaData.LastUpdatedTime`), so pulls can finish in any order; the customer and item imports follow the same rule now.
+  - **A document's client** is the client linked to its customer, or, for a sub-customer, to the top-level customer above it (`client_qb_id`, worked out from the imported customers). No foreign key: linking a client later shows its documents at once. `project_id` waits for M6, which sends estimates for jobs; until then nothing moves a job's stage or adds billing to its timeline.
+  - **A voided invoice** stays, zeroed. It's recognized by a zero total and "Voided" in its `PrivateNote` (Intuit's blog and vendors describe it; the sandbox test now checks it).
+  - **Import:** connecting imports the last 12 months of estimates, invoices, and payments, plus older invoices still owed (`Balance > '0'`), 200 per job. Older paid documents stay in QuickBooks only. The invoices page can run it again.
+  - **`EntitySync`** brings in one record: `pull` fetches it as it is now (a 610 means deleted), and `apply` stores one already in hand. A deleted customer is a merge: its client is unlinked and a sync issue says to link it again. A payment, pulled or swept, also queues a pull of each invoice it pays, before and after, for their balances. `SyncQuickBooksEntity` queues one pull per record (unique until it starts), and a pull that keeps failing becomes a sync issue.
+  - **The hourly sweep** (`SweepQuickBooksChanges`, scheduled hourly, and "Check for changes now" on the QuickBooks page) asks CDC for customers, items, estimates, invoices, and payments changed since the cursor (`changes_synced_at`, QuickBooks' own clock from the last answer, less 5 minutes), customers first so documents find them, then runs the automatic customer match. Connecting starts the cursor. A record that won't store becomes a sync issue without stopping the rest. A cursor beyond CDC's 30 days, or an answer of 1,000 records, raises an issue saying what to import again.
+  - **Settings → Sync issues** (super admins): one open row per problem, counting repeats, with Retry (pulls the record now) and Resolve. A record that later syncs resolves its own issue. A new issue goes to super admins' bells once.
+  - **Billing** in the admin: Estimates, Invoices (Unpaid first), and Payments lists, read-only, each linking to the document in QuickBooks. A linked client's page has Estimates and Invoices tabs.
+  - **Forget this company** also deletes its estimates, invoices, payments, and sync issues.
+  - The per-realm rate limiter still waits: every job here makes one or a few calls.
+- **M5e Webhooks:** `POST /webhooks/quickbooks` (signature, realm filter, events stored unique on `id`, each entity queued as a `SyncQuickBooksEntity`), merge events, the Intuit app's required URLs, and the production-key questionnaire. Taylor sets the webhook URL and verifier token in the Intuit app, and staging's HTTP basic auth (a Laravel Cloud setting) will refuse Intuit's webhooks, which can't send a password, so that needs a Cloud-side answer first.
 - **First spike:** in the sandbox, confirm that `TxnStatus=Accepted` is writable, what `invoiceLink` requires, how AST behaves on estimates, merge-event semantics, and the CustomTxnNumbers behavior.
 
 **M6 QuickBooks outbound + portal money**
@@ -487,7 +498,8 @@ Conventions:
 - ~~Whether Estimate `TxnStatus=Accepted`, `AcceptedBy`, and `AcceptedDate` can be written via a sparse update.~~ Verified: all three read back as written. The portal's approval can write back to QuickBooks (M6).
 - ~~What `invoiceLink` requires.~~ Verified that this works: an invoice with `BillEmail` and `AllowOnlineCreditCardPayment` / `AllowOnlineACHPayment` set, read with `include=invoiceLink`, returns a link (on `developer.intuit.com` in the sandbox). Not tested: whether it still works without them. M6 builds invoices this way. The sandbox's Preferences didn't report the `AllowOnline*` flags at all, and `ETransactionEnabledStatus` was `NotApplicable`, so those can't be used to tell whether QB Payments is on.
 - **How AST behaves on Estimates: still open.** An estimate with a taxable line (`TaxCodeRef TAX`) and an NC `ShipAddr` came back with no tax: `TotalTax 0`, no `TxnTaxCodeRef`. That's not evidence against AST on estimates. The sandbox company is Intuit's default, which has no NC tax agency set up, and Preferences reported `UsingSalesTax: true` but no `PartnerTaxEnabled`. To settle it: in the sandbox, set up sales tax with the NC Department of Revenue as an agency, then run the command again.
-- Whether a merge event's `intuitentityid` is the surviving record. Not testable by API; merge two customers in the sandbox once webhooks exist (M5d).
+- Whether a merge event's `intuitentityid` is the surviving record. Not testable by API; merge two customers in the sandbox once webhooks exist (M5e). Until then, the hourly sweep treats a merged-away customer as deleted.
+- **How a voided invoice reads back, and how CDC reports a deletion: not yet run.** The sandbox test now voids its test invoice and reads it back (expected: `TotalAmt` 0 and "Voided" in `PrivateNote`, which is how `DocumentMirror` recognizes one), and after the tidy-up asks CDC for the last half hour (expected: the deleted invoice as its Id with `status: Deleted`). Run `app:quickbooks-sandbox-test` again after M5d deploys.
 - **Whether `Active IN (true,false)` queries work: inconclusive.** The query ran (29 matched), but the company had no inactive customers, so it couldn't show whether inactive ones are included. The run itself left one deactivated test customer, so running it again settles it. The item import doesn't depend on it: it asks for active and inactive items separately.
 - **Whether CustomTxnNumbers produces a blank DocNumber: half answered.** With it off (the sandbox's default), QuickBooks assigned DocNumbers to both the estimate and the invoice. With it on, still unknown: turn on custom transaction numbers in the sandbox's sales settings and run the command again. The plan already supplies a DocNumber when it's on.
 - ~~Whether `:` is allowed in DisplayName.~~ Verified that it isn't: QuickBooks refused the customer with "Invalid String … Element contains invalid characters" (`:` is its separator for sub-customers). The customer sync (M6) must replace `:` in a client's display name before sending it.

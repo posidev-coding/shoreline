@@ -3,10 +3,15 @@
 namespace App\Filament\Pages;
 
 use App\Enums\UserRole;
+use App\Jobs\SweepQuickBooksChanges;
 use App\Models\CatalogItem;
 use App\Models\Client;
+use App\Models\Estimate;
+use App\Models\Invoice;
+use App\Models\Payment;
 use App\Models\QuickBooksConnection;
 use App\Models\QuickBooksCustomer;
+use App\Models\QuickBooksSyncIssue;
 use App\Models\User;
 use App\Services\QuickBooks\QuickBooksClient;
 use App\Services\QuickBooks\QuickBooksException;
@@ -90,6 +95,11 @@ class QuickBooks extends Page
                             ? 'Stops for good on '.$when($connection->refresh_hard_expires_at).'. You’ll be emailed from 60 days before.'
                             : 'QuickBooks hasn’t reported when it stops for good (at most five years). It’s renewed daily, so it doesn’t lapse.')
                         ->visible($connection?->isConnected() === true),
+                    TextEntry::make('changes')
+                        ->label('Changes from QuickBooks')
+                        ->state($connection?->changes_synced_at ? 'Last checked '.$when($connection->changes_synced_at) : 'Not checked yet')
+                        ->helperText('Checked every hour, by QuickBooks’ clock.')
+                        ->visible($connection?->isConnected() === true),
                     TextEntry::make('redirect')
                         ->label('Redirect URI')
                         ->state(QuickBooksCallback::redirectUri())
@@ -145,6 +155,15 @@ class QuickBooks extends Page
                         Notification::make()->danger()->title('QuickBooks didn’t answer as expected')->body($exception->getMessage())->persistent()->send();
                     }
                 }),
+            Action::make('sweep')
+                ->label('Check for changes now')
+                ->icon(Heroicon::OutlinedArrowDownTray)
+                ->color('gray')
+                ->visible($isConnected)
+                ->action(function (): void {
+                    SweepQuickBooksChanges::dispatch();
+                    Notification::make()->success()->title('Checking QuickBooks for changes')->body('It runs on its own every hour too. Anything that doesn’t sync shows under Sync issues.')->send();
+                }),
             Action::make('disconnect')
                 ->color('danger')
                 ->visible($isConnected)
@@ -159,7 +178,7 @@ class QuickBooks extends Page
                 ->color('danger')
                 ->visible($connection !== null && ! $isConnected)
                 ->requiresConfirmation()
-                ->modalDescription('So that a different QuickBooks company can be connected. Its customers and items leave the app: clients are unlinked from them, and parts and job lines lose the item they bill as. Nothing in QuickBooks changes. To use this same company again, Connect again instead, which keeps all of that.')
+                ->modalDescription('So that a different QuickBooks company can be connected. Its customers, items, estimates, invoices, payments, and sync issues leave the app: clients are unlinked from them, and parts and job lines lose the item they bill as. Nothing in QuickBooks changes. To use this same company again, Connect again instead, which keeps all of that.')
                 ->action(function (): void {
                     $connection = $this->connection();
                     $realm = $connection->realm_id;
@@ -171,10 +190,16 @@ class QuickBooks extends Page
                         $customers = QuickBooksCustomer::query()->where('realm_id', $realm)->delete();
                         // Parts and job lines let go of the items by foreign key.
                         $items = CatalogItem::query()->where('realm_id', $realm)->delete();
+                        // Payment applications go with their payments, by foreign key.
+                        $documents = Estimate::withTrashed()->where('realm_id', $realm)->forceDelete()
+                            + Invoice::withTrashed()->where('realm_id', $realm)->forceDelete()
+                            + Payment::withTrashed()->where('realm_id', $realm)->forceDelete();
+                        QuickBooksSyncIssue::query()->where('realm_id', $realm)->delete();
 
                         activity()->causedBy($this->user())->event('quickbooks')
                             ->log("Forgot QuickBooks company {$realm}: unlinked {$clients} ".str('client')->plural($clients)
-                                .", removed {$customers} ".str('customer')->plural($customers)." and {$items} ".str('item')->plural($items));
+                                .", removed {$customers} ".str('customer')->plural($customers).", {$items} ".str('item')->plural($items)
+                                ." and {$documents} ".str('document')->plural($documents));
                         $connection->delete();
                     });
 

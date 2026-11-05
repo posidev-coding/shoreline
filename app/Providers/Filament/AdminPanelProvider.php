@@ -48,7 +48,7 @@ class AdminPanelProvider extends PanelProvider
             ])
             ->font('Public Sans', provider: LocalFontProvider::class)
             ->viteTheme('resources/css/filament/admin/theme.css')
-            ->navigationGroups(['Work', 'Parts', 'Website', 'Settings'])
+            ->navigationGroups(['Work', 'Billing', 'Parts', 'Website', 'Settings'])
             // A project's view page is where its line items, visits, and checklist get edited.
             ->readOnlyRelationManagersOnResourceViewPagesByDefault(false)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\Filament\Resources')

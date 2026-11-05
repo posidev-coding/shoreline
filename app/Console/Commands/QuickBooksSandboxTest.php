@@ -15,7 +15,8 @@ use Illuminate\Console\Command;
 /**
  * Asks the connected sandbox company what the plan couldn't confirm from Intuit's docs (PLAN.md,
  * "Unverified"), and prints a table to paste back. It creates two test customers, an estimate,
- * and an invoice, then deletes the documents and deactivates the customers. Sandbox only.
+ * and an invoice, voids the invoice, then deletes the documents and deactivates the customers,
+ * and asks change data capture how it reports them. Sandbox only.
  */
 #[Signature('app:quickbooks-sandbox-test {--keep : Leave the test records in the sandbox}')]
 #[Description('Run the QuickBooks sandbox checks and print what the sandbox says')]
@@ -70,12 +71,18 @@ class QuickBooksSandboxTest extends Command
             $this->check('Estimate TxnStatus=Accepted (sparse)', fn (): string => $this->accept());
             $this->check('Invoice include=invoiceLink', fn (): string => $this->invoiceLink());
             $this->check('Invoice DocNumber', fn (): string => $this->docNumber('invoice'));
+            $this->check('Invoice void (operation=void)', fn (): string => $this->void());
         }
 
         $this->rows[] = ['Merge events', 'Not testable by API', 'Merge two customers in the sandbox once webhooks exist (M5d).'];
 
         if (! $this->option('keep')) {
             $this->tidyUp();
+
+            // After the tidy-up, so the deleted test invoice shows how a deletion is reported.
+            if (isset($this->made['invoice']['Id'])) {
+                $this->check('Change data capture (CDC)', fn (): string => $this->changes());
+            }
         }
 
         $this->table(['Check', 'Result', 'Detail'], $this->rows);
@@ -236,6 +243,39 @@ class QuickBooksSandboxTest extends Command
         return $link
             ? 'Present, on '.parse_url((string) $link, PHP_URL_HOST)
             : 'Absent (BillEmail set; online card '.var_export($read['AllowOnlineCreditCardPayment'] ?? null, true).', bank '.var_export($read['AllowOnlineACHPayment'] ?? null, true).')';
+    }
+
+    /**
+     * Voids the test invoice and reads it back, to see how a voided invoice looks: QuickBooks
+     * keeps it, zeroed, and is said to note "Voided" in its PrivateNote.
+     */
+    private function void(): string
+    {
+        $invoice = $this->made['invoice'] ?? throw new QuickBooksException('No invoice was created.');
+
+        $this->client->post('invoice', [
+            'Id' => $invoice['Id'],
+            'SyncToken' => $this->current('invoice')['SyncToken'] ?? $invoice['SyncToken'],
+        ], ['operation' => 'void']);
+
+        $read = $this->client->read('Invoice', (string) $invoice['Id']);
+
+        return 'Read back: TotalAmt '.var_export($read['TotalAmt'] ?? null, true)
+            .', Balance '.var_export($read['Balance'] ?? null, true)
+            .', PrivateNote '.var_export($read['PrivateNote'] ?? null, true);
+    }
+
+    /**
+     * Asks change data capture for the last half hour, which takes in the test documents.
+     */
+    private function changes(): string
+    {
+        $result = $this->client->changesSince(['Customer', 'Estimate', 'Invoice'], now()->subMinutes(30));
+        $invoice = collect($result['changes']['Invoice'] ?? [])->firstWhere('Id', $this->made['invoice']['Id']);
+
+        return 'Server time '.($result['time']?->toIso8601String() ?? 'not reported')
+            .'; '.(collect($result['changes'])->map(fn (array $records, string $entity): string => count($records)." {$entity}")->implode(', ') ?: 'no changes')
+            .'; test invoice '.($invoice === null ? 'not listed' : 'listed with status '.var_export($invoice['status'] ?? null, true));
     }
 
     /**

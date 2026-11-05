@@ -5,7 +5,6 @@ namespace App\Services\QuickBooks;
 use App\Enums\CatalogItemType;
 use App\Models\CatalogItem;
 use App\Models\QuickBooksConnection;
-use Illuminate\Support\Carbon;
 
 /**
  * Pulls the company's items into catalog_items, active and inactive, keyed by realm and QuickBooks
@@ -25,8 +24,7 @@ final class ItemImporter
         // A plain query returns only active items; inactive ones need asking for.
         foreach (['', 'where Active = false'] as $where) {
             foreach ($client->queryAll('Item', $where) as $item) {
-                $model = CatalogItem::query()->firstOrNew(['realm_id' => $connection->realm_id, 'qb_id' => (string) $item['Id']]);
-                $model->fill($this->attributes($item))->save();
+                $model = $this->store($connection->realm_id, $item);
 
                 if ($model->wasRecentlyCreated) {
                     $counts['created']++;
@@ -40,16 +38,30 @@ final class ItemImporter
     }
 
     /**
+     * Stores one item, from the import, the hourly sweep, or a pull of that item.
+     *
+     * @param  array<string, mixed>  $item
+     */
+    public function store(string $realmId, array $item): CatalogItem
+    {
+        $model = CatalogItem::query()->firstOrNew(['realm_id' => $realmId, 'qb_id' => (string) $item['Id']]);
+
+        if (! QuickBooksRecord::isOlderThan($item, $model->qb_last_updated_at)) {
+            $model->fill($this->attributes($item))->save();
+        }
+
+        return $model;
+    }
+
+    /**
      * @param  array<string, mixed>  $item
      * @return array<string, mixed>
      */
     private function attributes(array $item): array
     {
-        $updated = data_get($item, 'MetaData.LastUpdatedTime');
-
         return [
             'qb_sync_token' => $item['SyncToken'] ?? null,
-            'qb_last_updated_at' => is_string($updated) ? Carbon::parse($updated)->utc() : null,
+            'qb_last_updated_at' => QuickBooksRecord::updatedAt($item),
             'qb_payload' => $item,
             'name' => (string) ($item['Name'] ?? ''),
             'fully_qualified_name' => (string) ($item['FullyQualifiedName'] ?? $item['Name'] ?? ''),

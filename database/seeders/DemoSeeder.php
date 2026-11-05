@@ -6,6 +6,7 @@ use App\Enums\CatalogItemType;
 use App\Enums\ClientUserRole;
 use App\Enums\ContactMethod;
 use App\Enums\EquipmentType;
+use App\Enums\EstimateStatus;
 use App\Enums\LeadStatus;
 use App\Enums\OrderStatus;
 use App\Enums\PartCategory;
@@ -18,8 +19,11 @@ use App\Enums\VisitStatus;
 use App\Enums\VisitType;
 use App\Models\CatalogItem;
 use App\Models\Client;
+use App\Models\Estimate;
+use App\Models\Invoice;
 use App\Models\Lead;
 use App\Models\Part;
+use App\Models\Payment;
 use App\Models\Project;
 use App\Models\QuickBooksCustomer;
 use App\Models\Service;
@@ -283,6 +287,31 @@ class DemoSeeder extends Seeder
         $customer('102', 'Demo Beach Rentals LLC', ['company_name' => 'Demo Beach Rentals LLC', 'email' => 'rentals@example.com', 'phone' => '+12525550192', 'billing_city' => 'Emerald Isle']);
         $customer('103', 'Demo Beach Rentals LLC:8 Demo Ocean Dr', ['parent_qb_id' => '102', 'billing_city' => 'Emerald Isle']);
         $customer('104', 'Demo Former Customer', ['email' => 'former@example.com', 'is_active' => false]);
+
+        $this->quickBooksDocuments();
+    }
+
+    /**
+     * The demo homeowner's QuickBooks paperwork as the mirrors would hold it: an accepted
+     * estimate, its invoice part paid, an older one paid in full, and the payments.
+     */
+    private function quickBooksDocuments(): void
+    {
+        $today = now(config('app.business_timezone'));
+        $shared = ['realm_id' => 'demo', 'qb_sync_token' => '0', 'qb_payload' => [], 'customer_qb_id' => '101', 'client_qb_id' => '101', 'customer_name' => 'Demo Homeowner'];
+
+        Estimate::query()->create([...$shared, 'qb_id' => '201', 'doc_number' => '1001', 'txn_date' => $today->copy()->subDays(12)->toDateString(),
+            'expiration_date' => $today->copy()->addDays(18)->toDateString(), 'status' => EstimateStatus::Accepted, 'accepted_by' => 'Demo Homeowner',
+            'accepted_date' => $today->copy()->subDays(10)->toDateString(), 'total_amt' => '412.39', 'total_tax' => '24.39']);
+        Invoice::query()->create([...$shared, 'qb_id' => '301', 'doc_number' => '1038', 'estimate_qb_id' => '201', 'txn_date' => $today->copy()->subDays(5)->toDateString(),
+            'due_date' => $today->copy()->addDays(25)->toDateString(), 'total_amt' => '412.39', 'balance' => '212.39']);
+        Invoice::query()->create([...$shared, 'qb_id' => '302', 'doc_number' => '1021', 'txn_date' => $today->copy()->subMonths(4)->toDateString(),
+            'due_date' => $today->copy()->subMonths(3)->toDateString(), 'total_amt' => '189.00', 'balance' => '0.00']);
+
+        foreach ([['401', '302', '189.00', 4], ['402', '301', '200.00', 0]] as [$id, $invoice, $amount, $monthsAgo]) {
+            Payment::query()->create([...$shared, 'qb_id' => $id, 'txn_date' => $today->copy()->subMonths($monthsAgo)->subDays(2)->toDateString(), 'total_amt' => $amount])
+                ->applications()->create(['txn_type' => 'Invoice', 'txn_qb_id' => $invoice, 'amount' => $amount]);
+        }
     }
 
     /**

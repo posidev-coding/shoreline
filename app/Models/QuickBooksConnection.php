@@ -32,11 +32,12 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $connected_at
  * @property Carbon|null $disconnected_at
  * @property string|null $disconnect_reason
+ * @property Carbon|null $changes_synced_at
  */
 #[Fillable([
     'environment', 'realm_id', 'company_name', 'access_token', 'refresh_token', 'access_expires_at',
     'refresh_expires_at', 'refresh_hard_expires_at', 'last_refreshed_at', 'preferences', 'preferences_checked_at',
-    'connected_by', 'connected_at', 'disconnected_at', 'disconnect_reason',
+    'connected_by', 'connected_at', 'disconnected_at', 'disconnect_reason', 'changes_synced_at',
 ])]
 #[Hidden(['access_token', 'refresh_token'])]
 // Not quick_books_connections, which is what Laravel would make of the class name.
@@ -52,6 +53,14 @@ class QuickBooksConnection extends Model
     public static function current(): ?self
     {
         return self::query()->latest('id')->first();
+    }
+
+    /**
+     * Sandbox or production, worked out once a request, for links into QuickBooks.
+     */
+    public static function environmentInUse(): ?QuickBooksEnvironment
+    {
+        return once(fn (): ?QuickBooksEnvironment => self::current()?->environment);
     }
 
     public function isConnected(): bool
@@ -78,6 +87,7 @@ class QuickBooksConnection extends Model
             'refresh_hard_expires_at' => 'datetime',
             'last_refreshed_at' => 'datetime',
             'preferences' => 'array',
+            'changes_synced_at' => 'datetime',
             'preferences_checked_at' => 'datetime',
             'connected_at' => 'datetime',
             'disconnected_at' => 'datetime',

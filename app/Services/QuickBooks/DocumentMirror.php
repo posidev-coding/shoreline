@@ -183,7 +183,7 @@ final class DocumentMirror
             'qb_last_updated_at' => QuickBooksRecord::updatedAt($document),
             'qb_payload' => $document,
             'customer_qb_id' => $customer,
-            'client_qb_id' => $this->topCustomer($realmId, $customer),
+            'client_qb_id' => $this->clientQbIdFor($realmId, $customer),
             'customer_name' => data_get($document, 'CustomerRef.name'),
         ];
     }
@@ -193,7 +193,7 @@ final class DocumentMirror
      * the imported customers. A customer not imported yet counts as top-level until the
      * document is pulled again.
      */
-    private function topCustomer(string $realmId, string $customerQbId): string
+    public function clientQbIdFor(string $realmId, string $customerQbId): string
     {
         $qbId = $customerQbId;
 

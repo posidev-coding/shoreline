@@ -40,9 +40,11 @@
         <env name="QUICKBOOKS_CLIENT_ID" value="test-client-id" force="true"/>
         <env name="QUICKBOOKS_CLIENT_SECRET" value="test-client-secret" force="true"/>
         <env name="QUICKBOOKS_ENVIRONMENT" value="sandbox" force="true"/>
+        <env name="QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN" value="test-verifier-token" force="true"/>
         <server name="QUICKBOOKS_CLIENT_ID" value="test-client-id" force="true"/>
         <server name="QUICKBOOKS_CLIENT_SECRET" value="test-client-secret" force="true"/>
         <server name="QUICKBOOKS_ENVIRONMENT" value="sandbox" force="true"/>
+        <server name="QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN" value="test-verifier-token" force="true"/>
         <env name="SESSION_DRIVER" value="array"/>
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>

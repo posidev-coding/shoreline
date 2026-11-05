@@ -12,6 +12,7 @@ use App\Models\Payment;
 use App\Models\QuickBooksConnection;
 use App\Models\QuickBooksCustomer;
 use App\Models\QuickBooksSyncIssue;
+use App\Models\QuickBooksWebhookEvent;
 use App\Models\User;
 use App\Services\QuickBooks\QuickBooksClient;
 use App\Services\QuickBooks\QuickBooksException;
@@ -51,6 +52,26 @@ class QuickBooks extends Page
     public static function canAccess(): bool
     {
         return auth()->user()?->role === UserRole::SuperAdmin;
+    }
+
+    /**
+     * Back from disconnecting the app inside QuickBooks: a call to QuickBooks finds the revoked
+     * access, and the connection is marked disconnected.
+     */
+    public function mount(): void
+    {
+        $connection = QuickBooksConnection::current();
+
+        if (! request()->boolean('disconnected') || $connection?->isConnected() !== true) {
+            return;
+        }
+
+        try {
+            QuickBooksClient::for($connection)->refreshCompanyDetails();
+            Notification::make()->info()->title('Still connected')->body('QuickBooks still accepts the app’s access.')->send();
+        } catch (QuickBooksException $exception) {
+            Notification::make()->warning()->title('QuickBooks has disconnected the app')->body($exception->getMessage())->persistent()->send();
+        }
     }
 
     public function content(Schema $schema): Schema
@@ -112,6 +133,48 @@ class QuickBooks extends Page
                         ->color('danger')
                         ->visible(! app(TokenManager::class)->isConfigured())
                         ->columnSpanFull(),
+                ]),
+            Section::make('Intuit app settings')
+                ->description('What the Intuit app’s settings and its production-key questionnaire ask for. Development keys and webhooks are for the sandbox; Production ones for real companies.')
+                ->columns(2)
+                ->schema([
+                    TextEntry::make('webhook_url')
+                        ->label('Webhook endpoint URL')
+                        ->state(route('webhooks.quickbooks'))
+                        ->helperText('Under Webhooks. Turn on Customer, Item, Estimate, Invoice, and Payment, with every event.')
+                        ->copyable()
+                        ->columnSpanFull(),
+                    TextEntry::make('verifier')
+                        ->label('Webhook verifier token')
+                        ->state(filled(config('services.quickbooks.webhook_verifier_token'))
+                            ? 'Set'
+                            : 'QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN isn’t set, so webhooks are refused.')
+                        ->color(filled(config('services.quickbooks.webhook_verifier_token')) ? null : 'danger')
+                        ->helperText('Shown on the Intuit app’s Webhooks page once the endpoint is saved.'),
+                    TextEntry::make('last_webhook')
+                        ->label('Last webhook')
+                        ->state(fn (): ?string => ($received = QuickBooksWebhookEvent::query()->latest('id')->value('created_at'))
+                            ? 'Received '.$when(Carbon::parse($received))
+                            : null)
+                        ->placeholder('None yet')
+                        ->helperText('Changes still come in hourly without them.'),
+                    TextEntry::make('launch_url')
+                        ->label('Launch and connect URL')
+                        ->state(self::getUrl())
+                        ->copyable(),
+                    TextEntry::make('disconnect_url')
+                        ->label('Disconnect URL')
+                        ->state(self::getUrl(['disconnected' => 1]))
+                        ->helperText('Where Intuit sends someone who disconnects the app from QuickBooks. This page then checks the connection.')
+                        ->copyable(),
+                    TextEntry::make('eula_url')
+                        ->label('End-user license agreement')
+                        ->state(route('pages.terms'))
+                        ->copyable(),
+                    TextEntry::make('privacy_url')
+                        ->label('Privacy policy')
+                        ->state(route('pages.privacy'))
+                        ->copyable(),
                 ]),
             Section::make('Company settings in QuickBooks')
                 ->description($connection?->preferences_checked_at ? 'As QuickBooks reported them '.$when($connection->preferences_checked_at).'. The sandbox test in M5 confirms what each one means for the app.' : null)
@@ -195,6 +258,7 @@ class QuickBooks extends Page
                             + Invoice::withTrashed()->where('realm_id', $realm)->forceDelete()
                             + Payment::withTrashed()->where('realm_id', $realm)->forceDelete();
                         QuickBooksSyncIssue::query()->where('realm_id', $realm)->delete();
+                        QuickBooksWebhookEvent::query()->where('realm_id', $realm)->delete();
 
                         activity()->causedBy($this->user())->event('quickbooks')
                             ->log("Forgot QuickBooks company {$realm}: unlinked {$clients} ".str('client')->plural($clients)

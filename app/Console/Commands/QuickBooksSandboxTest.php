@@ -74,7 +74,7 @@ class QuickBooksSandboxTest extends Command
             $this->check('Invoice void (operation=void)', fn (): string => $this->void());
         }
 
-        $this->rows[] = ['Merge events', 'Not testable by API', 'Merge two customers in the sandbox once webhooks exist (M5d).'];
+        $this->rows[] = ['Merge events', 'Not testable by API', 'With webhooks set up, merge two customers in the sandbox, then check the client page and Settings → Sync issues.'];
 
         if (! $this->option('keep')) {
             $this->tidyUp();

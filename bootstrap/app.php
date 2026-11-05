@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
         then: function (): void {
             Route::middleware('content')->group(base_path('routes/content.php'));
             Route::group([], base_path('routes/feeds.php'));
+            Route::group([], base_path('routes/webhooks.php'));
         },
     )
     ->withMiddleware(function (Middleware $middleware): void {

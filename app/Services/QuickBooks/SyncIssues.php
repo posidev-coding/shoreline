@@ -62,12 +62,13 @@ final class SyncIssues
     }
 
     /**
-     * Resolves the open issue about a record that has now synced, if there is one.
+     * Resolves the open issue about a record that has now synced (pulled, or with PushFailed,
+     * sent), if there is one.
      */
-    public static function resolveFor(string $entity, string $qbId): void
+    public static function resolveFor(string $entity, string $qbId, SyncIssueKind $kind = SyncIssueKind::PullFailed): void
     {
         QuickBooksSyncIssue::query()->open()
-            ->where('kind', SyncIssueKind::PullFailed)
+            ->where('kind', $kind)
             ->where('entity', $entity)
             ->where('qb_id', $qbId)
             ->update(['resolved_at' => now()]);

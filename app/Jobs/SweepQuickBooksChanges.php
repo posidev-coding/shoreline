@@ -2,8 +2,10 @@
 
 namespace App\Jobs;
 
+use App\Enums\CustomerSyncState;
 use App\Enums\SyncIssueKind;
 use App\Jobs\Middleware\BackOffWhenQuickBooksIsBusy;
+use App\Models\Client;
 use App\Models\QuickBooksConnection;
 use App\Services\QuickBooks\CustomerMatcher;
 use App\Services\QuickBooks\EntitySync;
@@ -37,6 +39,13 @@ class SweepQuickBooksChanges implements ShouldBeUnique, ShouldQueue
     public const int LOOKBACK_DAYS = 30;
 
     public const int MAX_CHANGES = 1000;
+
+    /**
+     * A pending client older than this has lost its push; the sweep queues it again.
+     */
+    public const int PUSH_GRACE_MINUTES = 10;
+
+    public const int PUSHES_PER_SWEEP = 50;
 
     public int $timeout = 85;
 
@@ -90,6 +99,24 @@ class SweepQuickBooksChanges implements ShouldBeUnique, ShouldQueue
         }
 
         $connection->update(['changes_synced_at' => $time ?? $askedAt]);
+
+        $this->queueLeftBehindPushes();
+    }
+
+    /**
+     * Linked clients whose push never ran (the queue lost it, or QuickBooks was disconnected), and
+     * ones linked before two-way sync that haven't had their first sync.
+     */
+    private function queueLeftBehindPushes(): void
+    {
+        Client::withTrashed()
+            ->whereNotNull('qb_id')
+            ->where(fn ($query) => $query
+                ->whereNull('qb_synced_fields')
+                ->orWhere(fn ($pending) => $pending->where('qb_sync_state', CustomerSyncState::Pending)->where('updated_at', '<', now()->subMinutes(self::PUSH_GRACE_MINUTES))))
+            ->limit(self::PUSHES_PER_SWEEP)
+            ->pluck('id')
+            ->each(fn (int $id) => PushQuickBooksCustomer::dispatch($id));
     }
 
     public function failed(?Throwable $exception): void

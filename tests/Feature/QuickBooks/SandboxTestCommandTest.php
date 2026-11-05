@@ -12,7 +12,10 @@ use Illuminate\Support\Facades\Http;
  */
 function fakeSandbox(array $failing = []): void
 {
-    Http::fake(function (Request $request) use ($failing) {
+    $names = [];
+    $billAddr = null;
+
+    Http::fake(function (Request $request) use ($failing, &$names, &$billAddr) {
         $path = (string) str(parse_url($request->url(), PHP_URL_PATH))->after('/v3/company/')->after('/');
         $query = urldecode((string) parse_url($request->url(), PHP_URL_QUERY));
         $body = $request->data();
@@ -23,6 +26,10 @@ function fakeSandbox(array $failing = []): void
             }
         }
 
+        if ($path === 'customer' && ! isset($body['sparse']) && in_array($body['DisplayName'] ?? null, $names, true)) {
+            return Http::response(['Fault' => ['Error' => [['Message' => 'Duplicate Name Exists Error', 'Detail' => 'The name supplied already exists.', 'code' => '6240']]]], 400);
+        }
+
         return Http::response(match (true) {
             str_starts_with($path, 'companyinfo') => ['CompanyInfo' => ['CompanyName' => 'Sandbox Company_US_1']],
             $path === 'preferences' => ['Preferences' => ['SalesFormsPrefs' => ['CustomTxnNumbers' => false, 'AllowOnlineCreditCardPayment' => true], 'TaxPrefs' => ['PartnerTaxEnabled' => true]]],
@@ -30,9 +37,10 @@ function fakeSandbox(array $failing = []): void
             $path === 'query' && str_contains($query, 'Active = false') => ['QueryResponse' => ['totalCount' => 2]],
             $path === 'query' && str_contains($query, 'count(*)') => ['QueryResponse' => ['totalCount' => 10]],
             $path === 'query' => ['QueryResponse' => ['Item' => [['Id' => '1', 'Name' => 'Services', 'Type' => 'Service']]]],
+            $path === 'customer' && isset($body['BillAddr']) => ['Customer' => ['Id' => $body['Id'], 'BillAddr' => $billAddr = $body['BillAddr']]],
             $path === 'customer' && isset($body['sparse']) => ['Customer' => ['Id' => $body['Id'], 'Active' => false]],
-            $path === 'customer' => ['Customer' => ['Id' => str_contains($body['DisplayName'], ':') ? '58' : '59', 'DisplayName' => $body['DisplayName'], 'SyncToken' => '0']],
-            str_starts_with($path, 'customer/') => ['Customer' => ['Id' => str($path)->after('/')->toString(), 'SyncToken' => '0']],
+            $path === 'customer' => ['Customer' => ['Id' => str_contains($names[] = $body['DisplayName'], ':') ? '58' : '59', 'DisplayName' => $body['DisplayName'], 'SyncToken' => '0']],
+            str_starts_with($path, 'customer/') => ['Customer' => ['Id' => str($path)->after('/')->toString(), 'SyncToken' => '0', 'BillAddr' => $billAddr]],
             str_contains($query, 'operation=delete') => [ucfirst($path) => ['status' => 'Deleted']],
             str_contains($query, 'operation=void') => ['Invoice' => ['Id' => '200', 'SyncToken' => '1']],
             $path === 'cdc' => ['time' => '2026-10-29T10:00:00-07:00', 'CDCResponse' => [['QueryResponse' => [
@@ -66,6 +74,8 @@ it('asks the sandbox each open question, prints the answers, and tidies up', fun
         ->expectsOutputToContain('Assigned: 1001')
         ->expectsOutputToContain('Read back: TxnStatus Accepted, AcceptedBy Shoreline test, AcceptedDate 2026-10-28')
         ->expectsOutputToContain('Present, on connect.intuit.com')
+        ->expectsOutputToContain('Refused with code 6240')
+        ->expectsOutputToContain("Read back: Line1 '210 Front St, Suite 2', Line2 ''")
         ->expectsOutputToContain("Read back: TotalAmt 0, Balance 0, PrivateNote 'Voided'")
         ->expectsOutputToContain("Server time 2026-10-29T17:00:00+00:00; 1 Customer, 1 Invoice; test invoice listed with status 'Deleted'")
         ->expectsOutputToContain('Not testable by API');

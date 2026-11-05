@@ -3,6 +3,7 @@
 use App\Enums\SyncIssueKind;
 use App\Filament\Pages\QuickBooks;
 use App\Filament\Resources\QuickBooksSyncIssues\Pages\ManageQuickBooksSyncIssues;
+use App\Jobs\PushQuickBooksCustomer;
 use App\Jobs\SweepQuickBooksChanges;
 use App\Jobs\SyncQuickBooksEntity;
 use App\Models\CatalogItem;
@@ -28,6 +29,8 @@ use Spatie\Activitylog\Models\Activity;
 beforeEach(function () {
     $this->actingAs($this->admin = User::factory()->superAdmin()->withMfa()->create());
     $this->connection = QuickBooksConnection::factory()->create(['realm_id' => '9130350000000001']);
+    // A new link's first sync (tests/Feature/QuickBooks/CustomerSyncTest.php covers it).
+    Queue::fake([PushQuickBooksCustomer::class]);
 });
 
 /**

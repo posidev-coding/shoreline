@@ -11,7 +11,7 @@ use Throwable;
 /**
  * Brings a page of QuickBooks customers into quickbooks_customers, keyed by realm and QuickBooks
  * id, with the email and phone stored the way clients store them so the two compare directly.
- * A client already matched to one gets its current SyncToken.
+ * A client already linked to one takes in its changes.
  */
 final class CustomerImporter
 {
@@ -31,19 +31,38 @@ final class CustomerImporter
     }
 
     /**
-     * Stores one customer, from an import page, the hourly sweep, or a pull of that customer.
+     * Stores one customer, from an import page, the hourly sweep, or a pull of that customer, and
+     * brings its changes into the client it's linked to (CustomerSync).
      *
      * @param  array<string, mixed>  $customer
      */
     public function store(string $realmId, array $customer): QuickBooksCustomer
     {
-        $updatedAt = QuickBooksRecord::updatedAt($customer);
-
         $row = QuickBooksCustomer::query()->firstOrNew(['realm_id' => $realmId, 'qb_id' => (string) $customer['Id']]);
 
         if (QuickBooksRecord::isOlderThan($customer, $row->qb_last_updated_at)) {
             return $row;
         }
+
+        $row = $this->mirror($realmId, $customer);
+        $client = Client::withTrashed()->where('realm_id', $realmId)->where('qb_id', $row->qb_id)->first();
+
+        if ($client !== null) {
+            app(CustomerSync::class)->pulled($client, $customer);
+        }
+
+        return $row;
+    }
+
+    /**
+     * Stores the customer's row only, as CustomerSync does after it sends a client's changes.
+     *
+     * @param  array<string, mixed>  $customer
+     */
+    public function mirror(string $realmId, array $customer): QuickBooksCustomer
+    {
+        $updatedAt = QuickBooksRecord::updatedAt($customer);
+        $row = QuickBooksCustomer::query()->firstOrNew(['realm_id' => $realmId, 'qb_id' => (string) $customer['Id']]);
 
         $row->fill([
             'qb_sync_token' => $customer['SyncToken'] ?? null,
@@ -61,12 +80,6 @@ final class CustomerImporter
             'parent_qb_id' => ($customer['Job'] ?? false) ? data_get($customer, 'ParentRef.value') : null,
             'is_project' => (bool) ($customer['IsProject'] ?? false),
         ])->save();
-
-        Client::query()
-            ->where('realm_id', $realmId)
-            ->where('qb_id', $row->qb_id)
-            ->toBase()
-            ->update(['qb_sync_token' => $row->qb_sync_token, 'qb_last_updated_at' => $updatedAt]);
 
         return $row;
     }

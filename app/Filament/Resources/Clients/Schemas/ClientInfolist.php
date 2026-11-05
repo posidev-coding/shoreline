@@ -55,7 +55,9 @@ class ClientInfolist
                         TextEntry::make('qb_id')
                             ->label('QuickBooks')
                             ->state(fn (Client $record): ?string => $record->qb_id === null ? null : ($record->quickBooksCustomer->display_name ?? "Customer {$record->qb_id}"))
-                            ->helperText(fn (Client $record): ?string => $record->qb_linked_at ? 'Linked '.$record->qb_linked_at->timezone(config('app.business_timezone'))->format('M j, Y') : null)
+                            ->helperText(fn (Client $record): ?string => $record->qb_linked_at
+                                ? 'Linked '.$record->qb_linked_at->timezone(config('app.business_timezone'))->format('M j, Y').($record->qb_sync_state ? ' · '.$record->qb_sync_state->getLabel() : '')
+                                : null)
                             ->url(fn (Client $record): ?string => $record->quickBooksCustomer
                                 ? QuickBooksCustomerResource::getUrl(parameters: ['tab' => 'linked', 'search' => $record->quickBooksCustomer->display_name])
                                 : null)

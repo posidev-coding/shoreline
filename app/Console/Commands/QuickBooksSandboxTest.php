@@ -62,6 +62,8 @@ class QuickBooksSandboxTest extends Command
         $this->check('Query: Active IN (true, false)', fn (): string => $this->activeInQuery());
         $this->check('Colon in DisplayName', fn (): string => 'Accepted: “'.$this->createCustomer("Shoreline test: colon {$stamp}", 'colon')['DisplayName'].'”');
         $this->check('Test customer', fn (): string => 'Created '.$this->createCustomer("Shoreline test {$stamp}", 'customer')['Id']);
+        $this->check('Duplicate DisplayName (6240)', fn (): string => $this->duplicateName("Shoreline test {$stamp}"));
+        $this->check('Sparse update of BillAddr', fn (): string => $this->billAddr());
 
         $item = $this->check('Service item for lines', fn (): string => $this->serviceItem());
 
@@ -142,6 +144,44 @@ class QuickBooksSandboxTest extends Command
         $this->made[$key] = $customer;
 
         return $customer;
+    }
+
+    /**
+     * A second customer with the test customer's name, which QuickBooks should refuse with 6240.
+     * The customer sync adds " (2)" when it does.
+     */
+    private function duplicateName(string $name): string
+    {
+        try {
+            $this->createCustomer($name, 'duplicate');
+        } catch (QuickBooksException $exception) {
+            return "Refused with code {$exception->intuitCode}";
+        }
+
+        return 'Accepted (the sync expects 6240)';
+    }
+
+    /**
+     * Gives the test customer a two-line billing address, then sends it as one line with Line2
+     * empty, as the customer sync does, and reads it back: Line2 should be gone.
+     */
+    private function billAddr(): string
+    {
+        $customer = $this->made['customer'] ?? throw new QuickBooksException('No test customer was created.');
+        $address = ['Line1' => '210 Front St', 'City' => 'Beaufort', 'CountrySubDivisionCode' => 'NC', 'PostalCode' => '28516'];
+
+        foreach ([[...$address, 'Line2' => 'Suite 2'], [...$address, 'Line1' => '210 Front St, Suite 2', 'Line2' => '']] as $billAddr) {
+            $this->client->post('customer', [
+                'Id' => $customer['Id'],
+                'SyncToken' => $this->current('customer')['SyncToken'] ?? $customer['SyncToken'],
+                'sparse' => true,
+                'BillAddr' => $billAddr,
+            ]);
+        }
+
+        $read = $this->current('customer');
+
+        return 'Read back: Line1 '.var_export(data_get($read, 'BillAddr.Line1'), true).', Line2 '.var_export(data_get($read, 'BillAddr.Line2'), true);
     }
 
     private function serviceItem(): string
@@ -292,7 +332,7 @@ class QuickBooksSandboxTest extends Command
             }
         }
 
-        foreach (['customer', 'colon'] as $key) {
+        foreach (['customer', 'colon', 'duplicate'] as $key) {
             if (isset($this->made[$key]['Id'])) {
                 $this->check('Tidy up: deactivate '.$this->made[$key]['DisplayName'], fn (): string => 'Active '.var_export($this->client->post('customer', [
                     'Id' => $this->made[$key]['Id'],

@@ -62,6 +62,26 @@ final class CustomerMatcher
         return $this->candidates($customer)->orderBy('display_name')->limit(5)->get();
     }
 
+    /**
+     * Top-level QuickBooks customers no client is linked to that share the client's email, phone,
+     * or name: the ones to offer before making the client a new customer.
+     *
+     * @return Collection<int, QuickBooksCustomer>
+     */
+    public function customersFor(Client $client): Collection
+    {
+        return QuickBooksCustomer::query()
+            ->whereNull('parent_qb_id')
+            ->whereNotExists(fn ($linked) => $linked->from('clients')->whereColumn('clients.qb_id', 'quickbooks_customers.qb_id'))
+            ->where(fn (Builder $query) => $query
+                ->when($client->email, fn (Builder $query, string $email) => $query->orWhereRaw('lower(email) = ?', [mb_strtolower($email)]))
+                ->when($client->phone, fn (Builder $query, string $phone) => $query->orWhere('phone', $phone))
+                ->orWhereRaw('lower(display_name) = ?', [mb_strtolower(trim($client->display_name))]))
+            ->orderBy('display_name')
+            ->limit(5)
+            ->get();
+    }
+
     private function sureMatch(QuickBooksCustomer $customer): ?Client
     {
         $candidates = $this->candidates($customer)->limit(2)->get();

@@ -19,6 +19,12 @@ enum SyncIssueKind: string implements HasLabel
     case TooManyChanges = 'too_many_changes';
     /** A customer linked to a client was deleted or merged away in QuickBooks. */
     case CustomerDeleted = 'customer_deleted';
+    /** A client's change that didn't reach QuickBooks, even after retrying. Retry sends it again. */
+    case PushFailed = 'push_failed';
+    /** A client changed in both places since the last sync; this says which values were kept. */
+    case CustomerConflict = 'customer_conflict';
+    /** A name QuickBooks already has, on a customer, vendor, or employee. */
+    case NameTaken = 'name_taken';
     /** A merge in QuickBooks that the app couldn't follow by itself. */
     case MergeNeedsReview = 'merge_needs_review';
     /** A signed webhook the app couldn't read. */
@@ -32,16 +38,19 @@ enum SyncIssueKind: string implements HasLabel
             self::ChangesMissed => 'Changes missed',
             self::TooManyChanges => 'Too many changes',
             self::CustomerDeleted => 'Linked customer gone',
+            self::PushFailed => 'Couldn’t send changes',
+            self::CustomerConflict => 'Changed in both places',
+            self::NameTaken => 'Name already in QuickBooks',
             self::MergeNeedsReview => 'Merge to check',
             self::WebhookUnreadable => 'Unreadable webhook',
         };
     }
 
     /**
-     * Whether pulling the record again might fix it.
+     * Whether pulling or sending the record again might fix it.
      */
     public function isRetryable(): bool
     {
-        return $this === self::PullFailed;
+        return in_array($this, [self::PullFailed, self::PushFailed], true);
     }
 }

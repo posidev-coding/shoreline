@@ -110,7 +110,7 @@ Conventions:
 
 ### QuickBooks mirrors and sync infrastructure
 - Every mirrored row carries `realm_id`, `qb_id` (unique on realm + id), `qb_sync_token`, `qb_last_updated_at`, `qb_payload` (jsonb).
-- Two-way entities also carry `last_synced_hash` and `sync_state` (`clean | dirty | pending | conflict | error`).
+- Two-way entities also carry the fields as both sides last agreed and a sync state. For clients (M6a) that's `qb_synced_fields` (jsonb) and `qb_sync_state` (`clean | pending | error`), not the planned `last_synced_hash`: a copy of the fields shows which side changed each one, which a hash can't.
 - **catalog_items**: QB Items with type, parent, default taxable, IncomeAccountRef, active. Includes generic items (Labor, Materials, Trip charge, Haul-away). Pull-only in v1.
 - **estimates** + **estimate_lines**: a snapshot of what was pushed, mirrored back from QB. M5d mirrors estimates with their lines in `qb_payload`; M6 adds `estimate_lines` when it pushes them and needs the diff.
 - **estimate_approvals**: user, typed name, IP, user agent, timestamp, SyncToken, total, terms version.
@@ -414,9 +414,18 @@ Conventions:
   - **Production keys:** after this deploys, Taylor completes Intuit's questionnaire with the URLs from the QuickBooks page.
 - **First spike:** in the sandbox, confirm that `TxnStatus=Accepted` is writable, what `invoiceLink` requires, how AST behaves on estimates, merge-event semantics, and the CustomTxnNumbers behavior.
 
-**M6 QuickBooks outbound + portal money**
-- Two-way customer sync, estimates from projects (AST + ShipAddr), PDFs.
-- Portal approval write-back, linked and deposit invoices, Pay Now, billing_status.
+**M6 QuickBooks outbound + portal money** (four PRs, each checked on staging)
+- **M6a Customer sync:**
+  - **Two-way for linked clients**, on name, company, first and last name, email, phone, and billing address (`CustomerFields`, which reads both sides into one shape: email lowercase, phone E.164, a two-letter state, QuickBooks' two street lines joined, and `:` in a name sent as `-`). Notes, the property-manager flag, and everything else stay app-only.
+  - **Field by field against the copy both sides last agreed** (`clients.qb_synced_fields`): a field changed on one side takes that change. Changed on both, QuickBooks wins, except the phone, where the newer edit wins (the client's `updated_at` against QuickBooks' `LastUpdatedTime`), and a sync issue lists what was kept and dropped. The first sync of a link has nothing agreed: QuickBooks wins wherever it has a value, and the client fills QuickBooks' blanks. That's every new link (automatic or by hand), and clients linked before M6a, which the hourly sweep picks up.
+  - **Outbound:** a linked client's save that changes those fields marks it `pending` in the same row and queues `PushQuickBooksCustomer` after commit. The flag is the outbox: it's written with the change, and the sweep re-queues any pending client left over 10 minutes, so no separate `quickbooks_outbox` table. A push reads the customer first (its SyncToken and any change made there), merges, and sends a sparse update of only the fields that differ. A stale SyncToken (5010) reads and tries again; a new name QuickBooks already has (6240) keeps QuickBooks' name, with an issue; a customer gone (610) unlinks the client, with an issue. Still failing after its retries, the client shows "Changes didn't reach QuickBooks" and a "Couldn't send changes" issue has Retry.
+  - **Inbound:** every stored customer (pull, sweep, webhook, import) brings its changes into its linked client and queues a push of anything the client has that QuickBooks doesn't. QuickBooks' values are written inside `CustomerSync::inbound()` (hidden Context), so the save isn't sent back; it's still in the client's history. A name another client has stays as it was, with an issue.
+  - **Pushes and pulls of one client take turns** under a cache lock, which also covers the sweep's inline pulls (a job's `WithoutOverlapping` wouldn't).
+  - **Add to QuickBooks** on a client's page links one of the matching QuickBooks customers it lists, or makes a new one (a name QuickBooks has gets " (2)", with an issue). Clients aren't added on their own: one converted from a lead may already be an old customer, and adding everyone would duplicate them or fill the books with people who never hired him. M6b asks for it when a job's first estimate goes out.
+  - **Not in M6a:** deleting a client here doesn't touch QuickBooks; the portal profile (contact edits from the client) isn't built yet; sub-customers per property come with estimates (M6b).
+- **M6b Estimates from jobs:** a job's lines become a QuickBooks estimate (every line with an ItemRef and TAX/NON, ShipAddr from the property, DocNumber when custom numbers are on), totals and tax read back and labeled as QuickBooks', the estimate PDF, and sub-customers per property for property managers.
+- **M6c Portal approval:** the estimate card with its PDF and Approve (typed name, same SyncToken, not expired), `estimate_approvals`, `TxnStatus=Accepted` written back, and the job moving to approved, from the portal or from QuickBooks.
+- **M6d Invoices and Pay Now:** the linked invoice and the optional deposit invoice, Pay Now (`invoiceLink` fetched on each click), `billing_status`, and payments on the job's timeline.
 
 **M7 Dashboard + automations**
 - P&L, A/R, and revenue widgets.
@@ -510,6 +519,7 @@ Conventions:
 - ~~Whether `Active IN (true,false)` queries work.~~ Verified (second run): it matched 30, the 29 active customers and the 1 inactive. The imports still ask for active and inactive records separately, which works too.
 - The second run changed nothing else: a colon in DisplayName was still refused, CustomTxnNumbers was still off (DocNumbers 1002 and 1039 assigned), and the estimate still had no tax, since the sandbox still has no NC tax agency.
 - Webhook event names for Delete and Void, which Intuit hasn't published. The app doesn't depend on them (M5e).
+- **What the customer sync assumes (M6a): not yet run.** That a duplicate DisplayName is refused with code 6240, and that a sparse update's `BillAddr` with `Line2: ''` empties the second line (the app keeps one street line). The sandbox test now checks both: run `app:quickbooks-sandbox-test` after M6a deploys.
 - **Whether CustomTxnNumbers produces a blank DocNumber: half answered.** With it off (the sandbox's default), QuickBooks assigned DocNumbers to both the estimate and the invoice. With it on, still unknown: turn on custom transaction numbers in the sandbox's sales settings and run the command again. The plan already supplies a DocNumber when it's on.
 - ~~Whether `:` is allowed in DisplayName.~~ Verified that it isn't: QuickBooks refused the customer with "Invalid String … Element contains invalid characters" (`:` is its separator for sub-customers). The customer sync (M6) must replace `:` in a client's display name before sending it.
 - ~~The name of the token response field that reports the refresh token's five-year limit.~~ Verified: `x_refresh_token_hard_expires_in`, alongside `x_refresh_token_expires_in`, when the request sends `x-include-refresh-token-hard-expires-in: true`. The QuickBooks page shows the date.

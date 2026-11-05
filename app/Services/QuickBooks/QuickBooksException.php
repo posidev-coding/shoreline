@@ -72,6 +72,22 @@ final class QuickBooksException extends RuntimeException
     }
 
     /**
+     * Intuit's 5010, Stale Object: the record changed since its SyncToken was read.
+     */
+    public function isStale(): bool
+    {
+        return $this->intuitCode === '5010';
+    }
+
+    /**
+     * Intuit's 6240, Duplicate Name Exists: another customer, vendor, or employee has the name.
+     */
+    public function isDuplicateName(): bool
+    {
+        return $this->intuitCode === '6240';
+    }
+
+    /**
      * Too many requests: the job should wait and try again.
      */
     public function isRateLimited(): bool

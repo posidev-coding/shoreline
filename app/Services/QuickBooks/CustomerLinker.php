@@ -43,6 +43,24 @@ final class CustomerLinker
     }
 
     /**
+     * Moves a client's link to another customer, because of what happened in QuickBooks (a
+     * merge), without anyone doing it here.
+     */
+    public function relink(Client $client, QuickBooksCustomer $customer, string $because): void
+    {
+        $client->forceFill([
+            'realm_id' => $customer->realm_id,
+            'qb_id' => $customer->qb_id,
+            'qb_sync_token' => $customer->qb_sync_token,
+            'qb_last_updated_at' => $customer->qb_last_updated_at,
+            'qb_linked_at' => now(),
+        ])->save();
+
+        activity()->performedOn($client)->event('quickbooks')
+            ->log("Moved to QuickBooks customer {$customer->display_name} ({$customer->qb_id}): {$because}");
+    }
+
+    /**
      * Unlinks the client: by someone, or, without one, because of what happened in QuickBooks.
      */
     public function unlink(Client $client, ?User $by, ?string $because = null): void

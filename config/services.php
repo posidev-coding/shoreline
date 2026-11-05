@@ -40,6 +40,8 @@ return [
         'client_id' => env('QUICKBOOKS_CLIENT_ID'),
         'client_secret' => env('QUICKBOOKS_CLIENT_SECRET'),
         'environment' => env('QUICKBOOKS_ENVIRONMENT', 'sandbox'),
+        // From the Intuit app's Webhooks page (Development or Production). Signs every webhook.
+        'webhook_verifier_token' => env('QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN'),
     ],
 
     'slack' => [

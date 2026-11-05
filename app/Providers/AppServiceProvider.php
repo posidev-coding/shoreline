@@ -7,12 +7,16 @@ use App\Models\User;
 use App\Policies\ActivityPolicy;
 use App\Policies\MediaPolicy;
 use App\Settings\SiteSettings;
+use App\Support\VisitorIp;
 use App\View\Composers\SiteLayoutComposer;
 use Filament\Support\Facades\FilamentTimezone;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
@@ -44,6 +48,10 @@ class AppServiceProvider extends ServiceProvider
         // A portal page's Livewire requests run the portal's check again, so someone whose access
         // was removed can't keep posting from a page left open.
         Livewire::addPersistentMiddleware([EnsurePortalUser::class]);
+
+        // Intuit sends a company's events in batches, retrying until one is acknowledged; this only
+        // stops a flood of unsigned requests from keeping the environment awake.
+        RateLimiter::for('webhooks', fn (Request $request): Limit => Limit::perMinute(120)->by(VisitorIp::from($request)));
 
         // The activity log's and media library's models live in their packages, out of reach of policy discovery.
         Gate::policy(Activity::class, ActivityPolicy::class);

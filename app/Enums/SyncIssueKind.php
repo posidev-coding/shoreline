@@ -19,6 +19,10 @@ enum SyncIssueKind: string implements HasLabel
     case TooManyChanges = 'too_many_changes';
     /** A customer linked to a client was deleted or merged away in QuickBooks. */
     case CustomerDeleted = 'customer_deleted';
+    /** A merge in QuickBooks that the app couldn't follow by itself. */
+    case MergeNeedsReview = 'merge_needs_review';
+    /** A signed webhook the app couldn't read. */
+    case WebhookUnreadable = 'webhook_unreadable';
 
     public function getLabel(): string
     {
@@ -28,6 +32,8 @@ enum SyncIssueKind: string implements HasLabel
             self::ChangesMissed => 'Changes missed',
             self::TooManyChanges => 'Too many changes',
             self::CustomerDeleted => 'Linked customer gone',
+            self::MergeNeedsReview => 'Merge to check',
+            self::WebhookUnreadable => 'Unreadable webhook',
         };
     }
 

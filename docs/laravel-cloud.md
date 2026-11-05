@@ -91,6 +91,14 @@ Put `QUICKBOOKS_CLIENT_SECRET` in the Secrets Manager, and redeploy. Then a supe
 
 On a sandbox connection, run `php artisan app:quickbooks-sandbox-test` from the Commands tab to answer PLAN.md's open QuickBooks questions.
 
+From M5e, webhooks. **Settings → QuickBooks** lists what the Intuit app asks for under **Intuit app settings**. In the Intuit app's **Webhooks** page (**Development** for staging and the sandbox, **Production** for the live site):
+
+1. Enter the page's **Webhook endpoint URL** (`https://<the environment's domain>/webhooks/quickbooks`).
+2. Turn on Customer, Item, Estimate, Invoice, and Payment, with every event, and save.
+3. Copy the **Verifier Token** it shows into the Secrets Manager as `QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN`, and redeploy. Until it's set, the app refuses every webhook.
+
+Intuit can't send a password, so an environment with HTTP basic auth on can't receive webhooks. The hourly check for changes keeps it current anyway. The QuickBooks page's **Last webhook** shows whether any have arrived.
+
 Don't set `DB_*`, `AWS_*`, `FILESYSTEM_DISK`, or `QUEUE_CONNECTION` by hand: custom variables override the injected ones.
 
 ## 5. Check that M0 is done

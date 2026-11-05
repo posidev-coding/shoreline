@@ -205,7 +205,7 @@ Conventions:
 ## QuickBooks Online integration
 **App setup**
 - Intuit Developer app with sandbox now and production keys after the questionnaire. Scope `com.intuit.quickbooks.accounting`.
-- Required URLs: host domain, launch, disconnect, connect/reconnect, EULA, and privacy. All are app routes.
+- Required URLs: host domain, launch, disconnect, connect/reconnect, EULA, and privacy. All are app routes, and Settings → QuickBooks lists them: launch and connect are the QuickBooks page, disconnect is the same page with `?disconnected=1` (which checks the connection, so a disconnect made in QuickBooks shows at once), and the EULA and privacy policy are `/terms` and `/privacy`.
 - Laravel Cloud's outbound IPs come from `cloud.laravel.com/api/ip`.
 
 **Client and tokens** (`app/Services/QuickBooks/`)
@@ -260,7 +260,7 @@ Conventions:
   - Verifies the `intuit-signature` header (base64 HMAC-SHA256 of `$request->getContent()`, keyed with the verifier token) using `hash_equals`.
   - Drops events whose `intuitaccountid` isn't the connected realm, inserts each CloudEvent (unique on `id`), and returns 200 immediately, unknown types included.
   - Then dispatches **one unique job per entity** that always fetches the latest version, so arrival order doesn't matter.
-- **Subscribed entities:** Customer, Item, Estimate, Invoice, Payment, CreditMemo, RefundReceipt.
+- **Subscribed entities:** Customer, Item, Estimate, Invoice, Payment, every event. (Not CreditMemo or RefundReceipt: the app doesn't mirror them, and a credit applied to an invoice arrives as a Payment that pays it.)
 - **Payment events:**
   1. Fetch the payment.
   2. Refetch every invoice it's applied to.
@@ -405,7 +405,13 @@ Conventions:
   - **Billing** in the admin: Estimates, Invoices (Unpaid first), and Payments lists, read-only, each linking to the document in QuickBooks. A linked client's page has Estimates and Invoices tabs.
   - **Forget this company** also deletes its estimates, invoices, payments, and sync issues.
   - The per-realm rate limiter still waits: every job here makes one or a few calls.
-- **M5e Webhooks:** `POST /webhooks/quickbooks` (signature, realm filter, events stored unique on `id`, each entity queued as a `SyncQuickBooksEntity`), merge events, the Intuit app's required URLs, and the production-key questionnaire. Taylor sets the webhook URL and verifier token in the Intuit app, and staging's HTTP basic auth (a Laravel Cloud setting) will refuse Intuit's webhooks, which can't send a password, so that needs a Cloud-side answer first.
+- **M5e Webhooks:**
+  - **`POST /webhooks/quickbooks`**, in `routes/webhooks.php`: no session, cookies, or CSRF, and a limit of 120 a minute per address. It checks `intuit-signature` (base64 HMAC-SHA256 of the raw body with `QUICKBOOKS_WEBHOOK_VERIFIER_TOKEN`; a missing token refuses everything), reads the raw body because Intuit may send `application/cloudevents+json`, keeps the connected company's events in `quickbooks_webhook_events` (unique on the event's `id`, so Intuit's retries are skipped; pruned after 30 days), queues one `ProcessQuickBooksWebhook`, and answers 200 with nothing, inside Intuit's 3 seconds. A signed body it can't read (the legacy `eventNotifications` format) is acknowledged and raised as a sync issue.
+  - **Events don't need their names known.** Intuit has published only some (`qbo.customer.merged.v1`, `….created.v1`, `….updated.v1`), not delete or void. Any event on a followed entity queues a `SyncQuickBooksEntity` pull, which sees a deletion (610) or a void for itself; events on other entities are kept and ignored.
+  - **Merges** (`data.deletedid` names the record merged away) queue `SyncQuickBooksMerge`, which asks QuickBooks before moving anything: the merged record must be gone, or it raises "Merge to check" and moves nothing. That makes the unconfirmed reading of `intuitentityid` as the record that's left safe either way. A customer's client moves to the customer that's left (`CustomerLinker::relink`, one history entry) unless that one already has a client, which raises an issue; the merged customer's documents and sub-customers move with it. An item's parts and job lines move to the item that's left.
+  - **Settings → QuickBooks** lists what the Intuit app and its production-key questionnaire ask for (webhook endpoint, verifier token status, last webhook, launch/connect/disconnect, EULA, privacy). Forget also clears the company's webhook events.
+  - **Staging can't receive webhooks while its HTTP basic auth is on.** It's a Laravel Cloud environment setting, and Cloud's docs say nothing of exempting a path. The hourly sweep keeps staging current regardless. Taylor's call: turn it off on staging (bots can then wake it), try Intuit with the credentials in the endpoint URL, or test webhooks first in production.
+  - **Production keys:** after this deploys, Taylor completes Intuit's questionnaire with the URLs from the QuickBooks page.
 - **First spike:** in the sandbox, confirm that `TxnStatus=Accepted` is writable, what `invoiceLink` requires, how AST behaves on estimates, merge-event semantics, and the CustomTxnNumbers behavior.
 
 **M6 QuickBooks outbound + portal money**
@@ -498,9 +504,12 @@ Conventions:
 - ~~Whether Estimate `TxnStatus=Accepted`, `AcceptedBy`, and `AcceptedDate` can be written via a sparse update.~~ Verified: all three read back as written. The portal's approval can write back to QuickBooks (M6).
 - ~~What `invoiceLink` requires.~~ Verified that this works: an invoice with `BillEmail` and `AllowOnlineCreditCardPayment` / `AllowOnlineACHPayment` set, read with `include=invoiceLink`, returns a link (on `developer.intuit.com` in the sandbox). Not tested: whether it still works without them. M6 builds invoices this way. The sandbox's Preferences didn't report the `AllowOnline*` flags at all, and `ETransactionEnabledStatus` was `NotApplicable`, so those can't be used to tell whether QB Payments is on.
 - **How AST behaves on Estimates: still open.** An estimate with a taxable line (`TaxCodeRef TAX`) and an NC `ShipAddr` came back with no tax: `TotalTax 0`, no `TxnTaxCodeRef`. That's not evidence against AST on estimates. The sandbox company is Intuit's default, which has no NC tax agency set up, and Preferences reported `UsingSalesTax: true` but no `PartnerTaxEnabled`. To settle it: in the sandbox, set up sales tax with the NC Department of Revenue as an agency, then run the command again.
-- Whether a merge event's `intuitentityid` is the surviving record. Not testable by API; merge two customers in the sandbox once webhooks exist (M5e). Until then, the hourly sweep treats a merged-away customer as deleted.
-- **How a voided invoice reads back, and how CDC reports a deletion: not yet run.** The sandbox test now voids its test invoice and reads it back (expected: `TotalAmt` 0 and "Voided" in `PrivateNote`, which is how `DocumentMirror` recognizes one), and after the tidy-up asks CDC for the last half hour (expected: the deleted invoice as its Id with `status: Deleted`). Run `app:quickbooks-sandbox-test` again after M5d deploys.
-- **Whether `Active IN (true,false)` queries work: inconclusive.** The query ran (29 matched), but the company had no inactive customers, so it couldn't show whether inactive ones are included. The run itself left one deactivated test customer, so running it again settles it. The item import doesn't depend on it: it asks for active and inactive items separately.
+- Whether a merge event's `intuitentityid` is the surviving record. Not testable by API. The merge job checks with QuickBooks before moving anything (M5e), so a wrong reading raises "Merge to check" instead of moving a client. To confirm: with webhooks reaching the app, merge two customers in the sandbox and see whether the client moved or an issue was raised.
+- ~~How a voided invoice reads back.~~ Verified (second run, November 2026): `TotalAmt` 0, `Balance` 0, `PrivateNote` `'Voided'`, which is how `DocumentMirror` recognizes one.
+- ~~How CDC reports a deletion.~~ Verified (second run): the deleted test invoice was listed with `status: 'Deleted'`, and the answer carried QuickBooks' clock (`time`), which the sweep's cursor uses.
+- ~~Whether `Active IN (true,false)` queries work.~~ Verified (second run): it matched 30, the 29 active customers and the 1 inactive. The imports still ask for active and inactive records separately, which works too.
+- The second run changed nothing else: a colon in DisplayName was still refused, CustomTxnNumbers was still off (DocNumbers 1002 and 1039 assigned), and the estimate still had no tax, since the sandbox still has no NC tax agency.
+- Webhook event names for Delete and Void, which Intuit hasn't published. The app doesn't depend on them (M5e).
 - **Whether CustomTxnNumbers produces a blank DocNumber: half answered.** With it off (the sandbox's default), QuickBooks assigned DocNumbers to both the estimate and the invoice. With it on, still unknown: turn on custom transaction numbers in the sandbox's sales settings and run the command again. The plan already supplies a DocNumber when it's on.
 - ~~Whether `:` is allowed in DisplayName.~~ Verified that it isn't: QuickBooks refused the customer with "Invalid String … Element contains invalid characters" (`:` is its separator for sub-customers). The customer sync (M6) must replace `:` in a client's display name before sending it.
 - ~~The name of the token response field that reports the refresh token's five-year limit.~~ Verified: `x_refresh_token_hard_expires_in`, alongside `x_refresh_token_expires_in`, when the request sends `x-include-refresh-token-hard-expires-in: true`. The QuickBooks page shows the date.
@@ -517,7 +526,8 @@ Conventions:
 - ~~Whether Cloud's edge caches HTML.~~ Verified on staging in M1: it doesn't. `/services`, sent with `public, s-maxage=600` and no app cookies, came back `cf-cache-status: DYNAMIC`. The shared edge caches by file extension only. Staging runs a current Flex size, which wakes in under 500 ms, so the site doesn't need the HTML cache.
 - ~~Whether Livewire's S3 temp-upload cleanup works with Cloud keys.~~ Not needed: `app:prune-uploads` deletes abandoned uploads daily instead of a bucket lifecycle rule.
 - Whether `request()->ip()` is the visitor on Cloud. The quote form prefers Cloudflare's `CF-Connecting-IP` there; the admin shows each lead's IP so staging can confirm it.
-- Whether the WAF lets Intuit webhook POSTs through.
+- Whether the WAF lets Intuit webhook POSTs through. The QuickBooks page's "Last webhook" says once one arrives.
+- Whether a cold start answers Intuit inside 3 seconds when both the app and Serverless Postgres are asleep. If not, Intuit retries 10 seconds later and the stored event ids stop it being processed twice.
 
 **Tooling**
 - ~~The Playwright setup for the Pest 5 browser plugin.~~ Verified in M0: pest-plugin-browser 5.1.2 drives Chromium build 1248 through the project's `playwright@1.64.1` (the plugin needs ≥ 1.63.0).

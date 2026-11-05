@@ -6,9 +6,15 @@ use App\Enums\SyncIssueKind;
 use App\Jobs\SyncQuickBooksEntity;
 use App\Models\CatalogItem;
 use App\Models\Client;
+use App\Models\Estimate;
+use App\Models\Invoice;
+use App\Models\Part;
+use App\Models\Payment;
 use App\Models\PaymentApplication;
+use App\Models\ProjectLineItem;
 use App\Models\QuickBooksConnection;
 use App\Models\QuickBooksCustomer;
+use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
@@ -52,6 +58,47 @@ final class EntitySync
         $this->apply($connection, $entity, $record);
 
         SyncIssues::resolveFor($entity, $qbId);
+    }
+
+    /**
+     * Follows a merge in QuickBooks, which reports the record that's left and the one merged into
+     * it. QuickBooks is asked first: the merged one must be gone, or nothing moves and a person
+     * is asked to look. A customer's client and documents move to the customer that's left, unless
+     * that one already has a client; an item's parts and job lines move to the item that's left.
+     */
+    public function merge(QuickBooksConnection $connection, string $entity, string $survivorQbId, string $mergedQbId): void
+    {
+        self::ensureFollowed($entity);
+
+        try {
+            QuickBooksClient::for($connection)->read($entity, $mergedQbId);
+            $mergedIsGone = false;
+        } catch (QuickBooksException $exception) {
+            if (! $exception->isNotFound()) {
+                throw $exception;
+            }
+
+            $mergedIsGone = true;
+        }
+
+        $this->pull($connection, $entity, $survivorQbId);
+
+        if (! $mergedIsGone) {
+            SyncIssues::raise(
+                SyncIssueKind::MergeNeedsReview,
+                "QuickBooks reported {$entity} {$mergedQbId} merged into {$survivorQbId}, but {$mergedQbId} is still there, so the app moved nothing. Check both in QuickBooks.",
+                $entity,
+                $mergedQbId,
+            );
+
+            return;
+        }
+
+        match ($entity) {
+            'Customer' => $this->customerMerged($connection->realm_id, $survivorQbId, $mergedQbId),
+            'Item' => $this->itemMerged($connection->realm_id, $survivorQbId, $mergedQbId),
+            default => $this->apply($connection, $entity, ['Id' => $mergedQbId, 'status' => 'Deleted']),
+        };
     }
 
     /**
@@ -126,6 +173,74 @@ final class EntitySync
         }
 
         $customer?->delete();
+    }
+
+    /**
+     * QuickBooks moves the merged customer's documents and sub-customers to the one that's left,
+     * so they move here too, and so does its client, unless the customer that's left has one.
+     */
+    private function customerMerged(string $realmId, string $survivorQbId, string $mergedQbId): void
+    {
+        $survivor = QuickBooksCustomer::query()->where('realm_id', $realmId)->where('qb_id', $survivorQbId)->first();
+        $merged = QuickBooksCustomer::query()->where('realm_id', $realmId)->where('qb_id', $mergedQbId)->first();
+        $client = Client::withTrashed()->where('realm_id', $realmId)->where('qb_id', $mergedQbId)->first();
+        $survivorClient = Client::withTrashed()->where('realm_id', $realmId)->where('qb_id', $survivorQbId)->first();
+        $mergedName = $merged->display_name ?? "customer {$mergedQbId}";
+
+        DB::transaction(function () use ($realmId, $survivorQbId, $mergedQbId, $survivor, $merged, $client, $survivorClient, $mergedName): void {
+            $clientQbId = $this->documents->clientQbIdFor($realmId, $survivorQbId);
+
+            foreach ([Estimate::class, Invoice::class, Payment::class] as $documents) {
+                $documents::withTrashed()->where('realm_id', $realmId)->where('customer_qb_id', $mergedQbId)
+                    ->update(['customer_qb_id' => $survivorQbId, 'client_qb_id' => $clientQbId]);
+                $documents::withTrashed()->where('realm_id', $realmId)->where('client_qb_id', $mergedQbId)
+                    ->update(['client_qb_id' => $clientQbId]);
+            }
+
+            QuickBooksCustomer::query()->where('realm_id', $realmId)->where('parent_qb_id', $mergedQbId)->update(['parent_qb_id' => $survivorQbId]);
+
+            if ($client !== null && $survivor !== null && $survivorClient === null) {
+                $this->linker->relink($client, $survivor, "{$mergedName} ({$mergedQbId}) was merged into it in QuickBooks");
+            } elseif ($client !== null) {
+                $this->linker->unlink($client, null, 'it was merged into another customer in QuickBooks');
+
+                SyncIssues::raise(
+                    SyncIssueKind::CustomerDeleted,
+                    "{$client->display_name} was linked to QuickBooks {$mergedName}, which was merged into ".($survivor->display_name ?? "customer {$survivorQbId}")
+                        .($survivorClient ? ", already linked to {$survivorClient->display_name}" : '')
+                        .'. Decide which client it is, and link it under QuickBooks customers.',
+                    'Customer',
+                    $mergedQbId,
+                );
+            }
+
+            $merged?->delete();
+        });
+    }
+
+    /**
+     * Parts and job lines that bill as the merged item bill as the one that's left.
+     */
+    private function itemMerged(string $realmId, string $survivorQbId, string $mergedQbId): void
+    {
+        $survivor = CatalogItem::query()->where('realm_id', $realmId)->where('qb_id', $survivorQbId)->first();
+        $merged = CatalogItem::query()->where('realm_id', $realmId)->where('qb_id', $mergedQbId)->first();
+
+        if ($merged === null || $survivor === null) {
+            return;
+        }
+
+        DB::transaction(function () use ($survivor, $merged): void {
+            $parts = Part::query()->where('catalog_item_id', $merged->getKey())->update(['catalog_item_id' => $survivor->getKey()]);
+            $lines = ProjectLineItem::query()->where('catalog_item_id', $merged->getKey())->update(['catalog_item_id' => $survivor->getKey()]);
+            $merged->delete();
+
+            activity()->event('quickbooks')->log(
+                "QuickBooks item {$merged->fully_qualified_name} was merged into {$survivor->fully_qualified_name}: "
+                .trans_choice('{0} no parts|{1} 1 part|[2,*] :count parts', $parts).' and '
+                .trans_choice('{0} no job lines|{1} 1 job line|[2,*] :count job lines', $lines).' bill as it now',
+            );
+        });
     }
 
     /**

@@ -3,6 +3,7 @@
 use App\Enums\SyncIssueKind;
 use App\Filament\Pages\QuickBooks;
 use App\Jobs\ProcessQuickBooksWebhook;
+use App\Jobs\PushQuickBooksCustomer;
 use App\Jobs\SyncQuickBooksEntity;
 use App\Jobs\SyncQuickBooksMerge;
 use App\Models\CatalogItem;
@@ -165,6 +166,8 @@ describe('processing', function () {
 describe('merges', function () {
     beforeEach(function () {
         $this->notFound = Http::response(['Fault' => ['Error' => [['Message' => 'Object Not Found', 'code' => '610']]]], 400);
+        // A moved client's first sync (tests/Feature/QuickBooks/CustomerSyncTest.php covers it).
+        Queue::fake([PushQuickBooksCustomer::class]);
     });
 
     it('moves a customer’s client, documents, and sub-customers to the customer that’s left', function () {

@@ -2,8 +2,12 @@
 
 namespace App\Models;
 
+use App\Enums\CustomerSyncState;
 use App\Enums\ProjectStage;
+use App\Jobs\PushQuickBooksCustomer;
 use App\Models\Concerns\CascadesSoftDeletes;
+use App\Services\QuickBooks\CustomerFields;
+use App\Services\QuickBooks\CustomerSync;
 use Database\Factories\ClientFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -22,6 +26,8 @@ use Spatie\Activitylog\Support\LogOptions;
  * properties. Linked to a QuickBooks customer in M5c, and synced with it in M6.
  *
  * @property-read QuickBooksCustomer|null $quickBooksCustomer
+ * @property array<string, string|null>|null $qb_synced_fields
+ * @property CustomerSyncState|null $qb_sync_state
  */
 #[Fillable([
     'display_name', 'first_name', 'last_name', 'company', 'email', 'phone',
@@ -143,6 +149,30 @@ class Client extends Model
             ->exists();
     }
 
+    /**
+     * A linked client's change to a field QuickBooks has too marks it pending and queues the push,
+     * unless the change came from QuickBooks (CustomerSync::inbound). The pending flag is saved in
+     * the same row as the change, so it's never lost; the hourly sweep queues any left behind.
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (self $client): void {
+            if ($client->qb_id === null || CustomerSync::isInbound() || ! $client->isDirty(CustomerFields::FIELDS)) {
+                return;
+            }
+
+            if (! CustomerFields::same(CustomerFields::fromClient($client), $client->qb_synced_fields)) {
+                $client->qb_sync_state = CustomerSyncState::Pending;
+            }
+        });
+
+        static::saved(function (self $client): void {
+            if ($client->qb_sync_state === CustomerSyncState::Pending && $client->wasChanged(CustomerFields::FIELDS) && ! CustomerSync::isInbound()) {
+                PushQuickBooksCustomer::dispatch($client->getKey())->afterCommit();
+            }
+        });
+    }
+
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()->logFillable()->logOnlyDirty()->dontLogEmptyChanges();
@@ -172,6 +202,8 @@ class Client extends Model
             'is_property_manager' => 'boolean',
             'qb_last_updated_at' => 'datetime',
             'qb_linked_at' => 'datetime',
+            'qb_synced_fields' => 'array',
+            'qb_sync_state' => CustomerSyncState::class,
         ];
     }
 }

@@ -2,6 +2,8 @@
 
 namespace App\Services\QuickBooks;
 
+use App\Enums\CustomerSyncState;
+use App\Jobs\PushQuickBooksCustomer;
 use App\Models\Client;
 use App\Models\QuickBooksCustomer;
 use App\Models\User;
@@ -9,10 +11,10 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Matches QuickBooks customers to clients, makes clients from them, and undoes either. A match
- * changes neither side's details: QuickBooks' fields take over when two-way sync arrives (M6).
- * Each change goes in the client's history, since the link columns aren't fillable and so
- * aren't logged as edits.
+ * Matches QuickBooks customers to clients, makes clients from them, and undoes either. A new
+ * link's first sync (CustomerSync) lets QuickBooks' values take over, and fills QuickBooks'
+ * blanks from the client. Each change goes in the client's history, since the link columns
+ * aren't fillable and so aren't logged as edits.
  */
 final class CustomerLinker
 {
@@ -29,17 +31,25 @@ final class CustomerLinker
             throw new InvalidArgumentException("{$customer->display_name} is already linked to a client.");
         }
 
-        $client->forceFill([
-            'realm_id' => $customer->realm_id,
-            'qb_id' => $customer->qb_id,
-            'qb_sync_token' => $customer->qb_sync_token,
-            'qb_last_updated_at' => $customer->qb_last_updated_at,
-            'qb_linked_at' => now(),
-        ])->save();
+        $this->attach($client, $customer);
         $customer->forceFill(['skipped_at' => null])->save();
 
         activity()->performedOn($client)->causedBy($by)->event('quickbooks')
             ->log(($by === null ? 'Matched automatically to' : 'Linked to')." QuickBooks customer {$customer->display_name} ({$customer->qb_id})");
+
+        $this->firstSync($client);
+    }
+
+    /**
+     * Links a client to the QuickBooks customer just made from it (CustomerSync::create), whose
+     * fields already match.
+     */
+    public function added(QuickBooksCustomer $customer, Client $client, User $by): void
+    {
+        $this->attach($client, $customer);
+
+        activity()->performedOn($client)->causedBy($by)->event('quickbooks')
+            ->log("Added to QuickBooks as customer {$customer->display_name} ({$customer->qb_id})");
     }
 
     /**
@@ -48,16 +58,12 @@ final class CustomerLinker
      */
     public function relink(Client $client, QuickBooksCustomer $customer, string $because): void
     {
-        $client->forceFill([
-            'realm_id' => $customer->realm_id,
-            'qb_id' => $customer->qb_id,
-            'qb_sync_token' => $customer->qb_sync_token,
-            'qb_last_updated_at' => $customer->qb_last_updated_at,
-            'qb_linked_at' => now(),
-        ])->save();
+        $this->attach($client, $customer);
 
         activity()->performedOn($client)->event('quickbooks')
             ->log("Moved to QuickBooks customer {$customer->display_name} ({$customer->qb_id}): {$because}");
+
+        $this->firstSync($client);
     }
 
     /**
@@ -67,7 +73,10 @@ final class CustomerLinker
     {
         $qbId = $client->qb_id;
 
-        $client->forceFill(['realm_id' => null, 'qb_id' => null, 'qb_sync_token' => null, 'qb_last_updated_at' => null, 'qb_linked_at' => null])->save();
+        $client->forceFill([
+            'realm_id' => null, 'qb_id' => null, 'qb_sync_token' => null, 'qb_last_updated_at' => null, 'qb_linked_at' => null,
+            'qb_synced_fields' => null, 'qb_sync_state' => null,
+        ])->save();
 
         activity()->performedOn($client)->causedBy($by)->event('quickbooks')
             ->log("Unlinked from QuickBooks customer {$qbId}".($because === null ? '' : ": {$because}"));
@@ -104,6 +113,30 @@ final class CustomerLinker
 
             return $client;
         });
+    }
+
+    /**
+     * The link columns. Nothing is agreed with the new customer yet: the first sync decides.
+     */
+    private function attach(Client $client, QuickBooksCustomer $customer): void
+    {
+        $client->forceFill([
+            'realm_id' => $customer->realm_id,
+            'qb_id' => $customer->qb_id,
+            'qb_sync_token' => $customer->qb_sync_token,
+            'qb_last_updated_at' => $customer->qb_last_updated_at,
+            'qb_linked_at' => now(),
+            'qb_synced_fields' => null,
+            'qb_sync_state' => CustomerSyncState::Pending,
+        ])->save();
+    }
+
+    /**
+     * The first sync of a new link: QuickBooks' values take over, and the client fills its blanks.
+     */
+    private function firstSync(Client $client): void
+    {
+        PushQuickBooksCustomer::dispatch($client->getKey())->afterCommit();
     }
 
     public function skip(QuickBooksCustomer $customer): void

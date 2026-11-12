@@ -249,6 +249,7 @@ class QuickBooks extends Page
                     DB::transaction(function () use ($connection, $realm): void {
                         $clients = Client::withTrashed()->where('realm_id', $realm)->toBase()->update([
                             'realm_id' => null, 'qb_id' => null, 'qb_sync_token' => null, 'qb_last_updated_at' => null, 'qb_linked_at' => null,
+                            'qb_synced_fields' => null, 'qb_sync_state' => null,
                         ]);
                         $customers = QuickBooksCustomer::query()->where('realm_id', $realm)->delete();
                         // Parts and job lines let go of the items by foreign key.

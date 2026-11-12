@@ -5,6 +5,7 @@ use App\Filament\Pages\QuickBooks;
 use App\Filament\Resources\Clients\ClientResource;
 use App\Filament\Resources\QuickBooksCustomers\Pages\ManageQuickBooksCustomers;
 use App\Jobs\ImportQuickBooksCustomers;
+use App\Jobs\PushQuickBooksCustomer;
 use App\Models\CatalogItem;
 use App\Models\Client;
 use App\Models\Estimate;
@@ -29,6 +30,8 @@ use Spatie\Activitylog\Models\Activity;
 beforeEach(function () {
     $this->actingAs($this->owner = User::factory()->owner()->withMfa()->create());
     $this->connection = QuickBooksConnection::factory()->create(['realm_id' => '9130350000000001']);
+    // Linking queues the first sync (tests/Feature/QuickBooks/CustomerSyncTest.php covers it).
+    Queue::fake([PushQuickBooksCustomer::class]);
 });
 
 /**
@@ -87,7 +90,7 @@ describe('import', function () {
             ->and(QuickBooksCustomer::query()->where('qb_id', '6')->sole()->is_active)->toBeFalse();
     });
 
-    it('updates on a second import, and gives a linked client the new SyncToken', function () {
+    it('updates on a second import, and brings the changes into a linked client', function () {
         Http::fake(['sandbox-quickbooks.api.intuit.com/*' => Http::sequence()
             ->push(['QueryResponse' => ['Customer' => [qbCustomer('1', 'Pat Lee')]]])
             ->push(['QueryResponse' => ['Customer' => [qbCustomer('1', 'Pat Lee-Roe', ['SyncToken' => '3'])]]])]);
@@ -99,7 +102,7 @@ describe('import', function () {
         $importer->importPage($this->connection, false, 1, 500);
 
         expect(QuickBooksCustomer::query()->sole())->display_name->toBe('Pat Lee-Roe')->qb_sync_token->toBe('3')
-            ->and($client->refresh())->qb_sync_token->toBe('3')->display_name->not->toBe('Pat Lee-Roe');
+            ->and($client->refresh())->qb_sync_token->toBe('3')->display_name->toBe('Pat Lee-Roe');
     });
 
     it('asks for the next page in another job while a page comes back full', function () {

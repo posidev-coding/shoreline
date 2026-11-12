@@ -4,9 +4,11 @@ namespace App\Filament\Resources\QuickBooksSyncIssues;
 
 use App\Enums\SyncIssueKind;
 use App\Filament\Resources\QuickBooksSyncIssues\Pages\ManageQuickBooksSyncIssues;
+use App\Models\Client;
 use App\Models\QuickBooksConnection;
 use App\Models\QuickBooksSyncIssue;
 use App\Models\User;
+use App\Services\QuickBooks\CustomerSync;
 use App\Services\QuickBooks\EntitySync;
 use App\Services\QuickBooks\QuickBooksException;
 use App\Services\QuickBooks\SyncIssues;
@@ -87,12 +89,16 @@ class QuickBooksSyncIssueResource extends Resource
                     ->visible(fn (QuickBooksSyncIssue $record): bool => $record->isOpen() && $record->kind->isRetryable()
                         && $record->entity !== null && $record->qb_id !== null
                         && QuickBooksConnection::current()?->isConnected() === true)
-                    ->action(function (QuickBooksSyncIssue $record, EntitySync $sync): void {
+                    ->action(function (QuickBooksSyncIssue $record, EntitySync $sync, CustomerSync $customers): void {
                         $connection = QuickBooksConnection::current();
                         abort_if($connection === null || $record->entity === null || $record->qb_id === null, 404);
 
                         try {
-                            $sync->pull($connection, $record->entity, $record->qb_id);
+                            if ($record->kind === SyncIssueKind::PushFailed) {
+                                $customers->push($connection, Client::withTrashed()->where('qb_id', $record->qb_id)->firstOrFail());
+                            } else {
+                                $sync->pull($connection, $record->entity, $record->qb_id);
+                            }
                         } catch (QuickBooksException $exception) {
                             Notification::make()->danger()->title('Still didn’t sync')->body($exception->getMessage())->persistent()->send();
 
